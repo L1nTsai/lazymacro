@@ -14,7 +14,9 @@ pnpm dev
 
 There's no local database. The app and the Supabase CLI both use the live project, so run `supabase link --project-ref <ref>` once.
 
-Voice and text logging need `ANTHROPIC_API_KEY` and a **paid-tier** `GEMINI_API_KEY`, because Google uses free-tier data to improve its products. `USDA_API_KEY` is optional and adds branded foods. Without keys, searching foods and entering label values still work.
+Logging needs `ANTHROPIC_API_KEY`. `USDA_API_KEY` is optional and adds branded foods. Without an Anthropic key, searching foods and entering label values still work.
+
+Voice uses the browser's built-in speech recognition, which is free but varies by device: iPhones need Siri turned on, Firefox doesn't support it by default, and the browser sends audio to Apple or Google. To switch to Gemini, add a **paid-tier** `GEMINI_API_KEY`, because Google uses free-tier data to improve its products. Nothing else needs changing.
 
 The microphone only works over https or on localhost, so testing on a phone over Wi-Fi needs a deployed or tunneled address.
 

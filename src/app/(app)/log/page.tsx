@@ -13,7 +13,8 @@ export default async function LogPage() {
   return (
     <PageSlide>
       <Suspense>
-        <LogFlow budget={budget} />
+        {/* Voice uses the browser until a Gemini key is added, then Gemini. */}
+        <LogFlow budget={budget} browserVoice={!process.env.GEMINI_API_KEY} />
       </Suspense>
     </PageSlide>
   );

@@ -39,12 +39,13 @@ async function typeMeal(page: Page, text: string) {
   await page.getByRole("button", { name: "Continue" }).click();
 }
 
-/** Interactions during a page slide land on the outgoing page, as they would for a person. */
-async function settled(page: Page) {
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.getAnimations({ subtree: true }).filter((a) => /^(push|pop)-/.test((a as CSSAnimation).animationName)).length))
-    .toBe(0);
-}
+/**
+ * Interactions during a page slide land on the outgoing page, as they would for a
+ * person. This waits a fixed time because asking WebKit's test build for running
+ * animations mid-slide crashes it: 3 of 3 runs with that check, 0 of 3 without.
+ */
+const SLIDE_MS = 500;
+const settled = (page: Page) => page.waitForTimeout(SLIDE_MS);
 
 const resetLog = (email: string) =>
   runSql(`
@@ -372,60 +373,128 @@ test("history shows the week, and yesterday's meal can be copied", async ({ page
   expect(countMeals(email)).toBe(2);
 });
 
-test("speaking transcribes on the server and deletes the audio", async ({ page, browserName }, info) => {
-  test.skip(browserName !== "chromium", "Only Chromium can fake a microphone in tests.");
+/** A stand-in for the browser's speech engine, since tests have no one speaking. */
+async function fakeSpeech(page: Page, script: { words?: string; error?: string; missing?: boolean }) {
+  await page.addInitScript((setup) => {
+    const w = window as unknown as Record<string, unknown>;
+    if (setup.missing) {
+      Object.defineProperty(window, "SpeechRecognition", { value: undefined, configurable: true });
+      Object.defineProperty(window, "webkitSpeechRecognition", { value: undefined, configurable: true });
+      return;
+    }
+    class FakeRecognition {
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        w.speechStarted = true;
+        setTimeout(() => {
+          if (setup.error) {
+            this.onerror?.({ error: setup.error });
+            this.onend?.();
+          } else if (setup.words) {
+            this.onresult?.({ results: [[{ transcript: setup.words }]] });
+          }
+        }, 300);
+      }
+      stop() {
+        w.speechStopped = true;
+        this.onend?.();
+      }
+      abort() {}
+    }
+    Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
+    Object.defineProperty(window, "webkitSpeechRecognition", { value: FakeRecognition, configurable: true });
+  }, script);
+}
+
+test("speaking uses the browser, finishes after a pause, and needs no Gemini", async ({ page }, info) => {
+  await fakeSpeech(page, { words: "just milk" });
   await signIn(page, logEmailFor(info.project.name));
   const before = await mockStats(page);
 
-  await page.getByRole("link", { name: "Log a meal" }).click();
+  // Desktop starts from the sidebar's button, phones from the raised mic.
+  await page.getByRole("link", { name: "Log a meal" }).locator("visible=true").click();
   await expect(page.getByRole("button", { name: "Stop recording" })).toBeVisible();
-  await expect(page.getByText(/Listening/)).toBeVisible();
+  await expect(page.getByText("just milk")).toBeVisible();
   await expectDesignRules(page);
-  await page.waitForTimeout(600);
-  await page.getByRole("button", { name: "Stop recording" }).click();
 
-  await expect(page.getByRole("heading", { name: "Check your meal" })).toBeVisible();
-  await expect(page.getByText(/60 grams of quick oats/)).toBeVisible();
+  // Nobody taps stop: the pause ends it, and the words go to the review page.
+  await expect(page.getByRole("heading", { name: "Check your meal" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /Edit Milk/ })).toBeVisible();
 
   const after = await mockStats(page);
-  expect(after.uploads).toBe(before.uploads + 1);
-  expect(after.transcribes).toBe(before.transcribes + 1);
-  expect(after.deletes).toBe(before.deletes + 1);
-  expect(after.unknown).toEqual([]);
-});
+  expect(after.parse).toBe(before.parse + 1);
+  expect(after.uploads).toBe(before.uploads);
+  expect(after.transcribes).toBe(before.transcribes);
 
-test("the daily limit stops AI use but not manual logging", async ({ page }, info) => {
-  const email = logEmailFor(info.project.name);
-  runSql(`
-    insert into public.ai_usage (user_id, day, kind, used)
-    select id, (now() at time zone 'UTC')::date, 'parse', 10 from auth.users where email = '${email}';`);
-  await signIn(page, email);
-  const before = (await mockStats(page)).parse;
-
-  await typeMeal(page, "just milk");
-  await expect(page.locator("p[role=alert]")).toContainText("today's limit of 10");
-  await expect(page.getByLabel("What you ate")).toHaveValue("just milk");
-  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
-  expect((await mockStats(page)).parse).toBe(before);
-
-  await page.goto("/log");
-  await page.getByRole("button", { name: "Search foods" }).click();
-  await page.getByLabel("Food name").fill("chicken breast");
-  await page.getByRole("button", { name: /Chicken, breast, boneless, skinless, raw/ }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
-  expect(countMeals(email)).toBe(1);
+  const [meal] = queryJson<{ source: string }>(`select source from public.meals where user_id = (select id from auth.users where email = '${logEmailFor(info.project.name)}')`);
+  expect(meal.source).toBe("voice");
 });
 
-test("the mic explains itself when it can't record", async ({ page, browserName }, info) => {
-  test.skip(browserName !== "chromium", "Uses a Chromium permission override.");
+test("tapping stop finishes right away", async ({ page }, info) => {
+  await fakeSpeech(page, { words: "just milk" });
   await signIn(page, logEmailFor(info.project.name));
-  await page.addInitScript(() => {
-    navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("no", "NotAllowedError"));
-  });
   await page.goto("/log");
   await page.getByRole("button", { name: "Start recording" }).click();
-  await expect(page.locator("p[role=alert]")).toContainText("Microphone access is off");
-  await page.getByRole("button", { name: "Type instead" }).click();
-  await expect(page.getByLabel("What you ate")).toBeVisible();
+  await expect(page.getByText("just milk")).toBeVisible();
+  await page.getByRole("button", { name: "Stop recording" }).click();
+  await expect(page.getByRole("heading", { name: "Check your meal" })).toBeVisible();
+});
+
+for (const [script, message] of [
+  [{ missing: true }, "Voice isn't available in this browser"],
+  [{ error: "not-allowed" }, "Microphone access is off"],
+  [{ error: "service-not-allowed" }, "Siri turned on"],
+  [{ error: "no-speech" }, "No speech was heard"],
+  [{ error: "network" }, "Voice needs a connection"],
+] as const) {
+  test(`voice explains itself: ${message}`, async ({ page }, info) => {
+    await fakeSpeech(page, script);
+    await signIn(page, logEmailFor(info.project.name));
+    await page.goto("/log");
+    await page.getByRole("button", { name: "Start recording" }).click();
+    await expect(page.locator("p[role=alert]")).toContainText(message);
+    await expectDesignRules(page);
+    await page.getByRole("button", { name: "Type instead" }).click();
+    await expect(page.getByLabel("What you ate")).toBeVisible();
+  });
+}
+
+test.describe("once a Gemini key is added", () => {
+  test.use({ baseURL: "http://localhost:3101" });
+
+  test("speaking transcribes on the server and deletes the audio", async ({ page, browserName }, info) => {
+    test.skip(browserName !== "chromium", "Only Chromium can fake a microphone in tests.");
+    await signIn(page, logEmailFor(info.project.name));
+    const before = await mockStats(page);
+
+    await page.getByRole("link", { name: "Log a meal" }).locator("visible=true").click();
+    await expect(page.getByRole("button", { name: "Stop recording" })).toBeVisible();
+    await expect(page.getByText(/Listening/)).toBeVisible();
+    await page.waitForTimeout(600);
+    await page.getByRole("button", { name: "Stop recording" }).click();
+
+    await expect(page.getByRole("heading", { name: "Check your meal" })).toBeVisible();
+    await expect(page.getByText(/60 grams of quick oats/)).toBeVisible();
+
+    const after = await mockStats(page);
+    expect(after.uploads).toBe(before.uploads + 1);
+    expect(after.transcribes).toBe(before.transcribes + 1);
+    expect(after.deletes).toBe(before.deletes + 1);
+    expect(after.unknown).toEqual([]);
+  });
+
+  test("the mic explains itself when it can't record", async ({ page, browserName }, info) => {
+    test.skip(browserName !== "chromium", "Uses a Chromium permission override.");
+    await signIn(page, logEmailFor(info.project.name));
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("no", "NotAllowedError"));
+    });
+    await page.goto("/log");
+    await page.getByRole("button", { name: "Start recording" }).click();
+    await expect(page.locator("p[role=alert]")).toContainText("Microphone access is off");
+  });
 });

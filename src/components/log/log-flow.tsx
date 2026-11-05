@@ -11,6 +11,7 @@ import { mealFromHour } from "@/lib/logging/clock";
 import type { DraftFood, DraftItem, DraftMeal } from "@/lib/logging/types";
 import { AmountEditor, recalculate } from "./amount-editor";
 import { FoodPicker } from "./food-picker";
+import { useBrowserSpeech } from "./use-browser-speech";
 import { useRecorder } from "./use-recorder";
 
 type Stage = "capture" | "type" | "working" | "review" | "item" | "swap" | "add" | "label" | "favorite-name" | "favorites" | "remember";
@@ -30,6 +31,15 @@ const RECORDER_MESSAGES = {
   unsupported: "The microphone needs a secure (https) connection in this browser. Type your meal instead.",
   denied: "Microphone access is off. Allow it in your browser settings, or type your meal instead.",
   failed: "The microphone didn't start. Try again, or type your meal instead.",
+};
+
+const SPEECH_MESSAGES = {
+  unsupported: "Voice isn't available in this browser. Try Safari or Chrome, or type your meal instead.",
+  denied: "Microphone access is off. Allow it in your browser settings, or type your meal instead.",
+  siri: "Voice needs Siri turned on in your iPhone's settings, and speech recognition allowed. Or type your meal instead.",
+  "no-speech": "No speech was heard. Try again, or type your meal instead.",
+  network: "Voice needs a connection. Check yours and try again, or type your meal instead.",
+  failed: "Voice didn't start. Try again, or type your meal instead.",
 };
 
 const totalsOf = (items: DraftItem[]) =>
@@ -121,7 +131,7 @@ function ItemCard({ item, onOpen, onDelete }: { item: DraftItem; onOpen: () => v
   );
 }
 
-export function LogFlow({ budget }: { budget: Budget }) {
+export function LogFlow({ budget, browserVoice }: { budget: Budget; browserVoice: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const [stage, setStage] = useState<Stage>("capture");
@@ -228,13 +238,16 @@ export function LogFlow({ budget }: { budget: Budget }) {
   }, [parse, transcribe]);
 
   const recorder = useRecorder(transcribe);
+  const speech = useBrowserSpeech(useCallback((spoken: string) => void parse(spoken, "voice"), [parse]));
+  const voice = browserVoice ? speech : recorder;
+  const voiceError = browserVoice ? (speech.error ? SPEECH_MESSAGES[speech.error] : null) : recorder.error ? RECORDER_MESSAGES[recorder.error] : null;
 
   useEffect(() => {
     if (params.get("start") === "1" && !autoStarted.current) {
       autoStarted.current = true;
-      void recorder.start();
+      void voice.start();
     }
-  }, [params, recorder]);
+  }, [params, voice]);
 
   const meal = meals[mealIndex];
   const active = meal?.items.find((item) => item.key === activeKey) ?? null;
@@ -474,11 +487,11 @@ export function LogFlow({ budget }: { budget: Budget }) {
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center">
                   <button
                     type="button"
-                    onClick={() => (recorder.recording ? recorder.stop() : recorder.start())}
-                    aria-label={recorder.recording ? "Stop recording" : "Start recording"}
+                    onClick={() => (voice.recording ? voice.stop() : voice.start())}
+                    aria-label={voice.recording ? "Stop recording" : "Start recording"}
                     className="flex size-28 items-center justify-center rounded-full bg-foreground text-background"
                   >
-                    {recorder.recording ? (
+                    {voice.recording ? (
                       <span className="size-8 rounded bg-background" />
                     ) : (
                       <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -487,17 +500,21 @@ export function LogFlow({ budget }: { budget: Budget }) {
                       </svg>
                     )}
                   </button>
-                  {recorder.recording ? (
+                  {voice.recording ? (
                     <>
                       <div aria-hidden="true" className="h-1.5 w-40 overflow-hidden rounded-full bg-track">
-                        <div className="h-full rounded-full" style={{ width: `${recorder.level * 100}%`, background: "var(--data-calories)" }} />
+                        {browserVoice ? (
+                          <div className="working-bar h-full w-1/3 rounded-full" style={{ background: "var(--data-calories)" }} />
+                        ) : (
+                          <div className="h-full rounded-full" style={{ width: `${recorder.level * 100}%`, background: "var(--data-calories)" }} />
+                        )}
                       </div>
-                      <p className="line-clamp-3 min-h-10 max-w-xs text-sm text-muted">{recorder.liveText || "Listening. Tap to finish, or just pause."}</p>
+                      <p className="line-clamp-3 min-h-10 max-w-xs text-sm text-muted">{voice.liveText || "Listening. Tap to finish, or just pause."}</p>
                     </>
                   ) : (
                     <p className="max-w-xs text-sm text-muted">Say what you ate, with amounts if you know them.</p>
                   )}
-                  {recorder.error ? <FormError message={RECORDER_MESSAGES[recorder.error]} /> : null}
+                  {voiceError ? <FormError message={voiceError} /> : null}
                 </div>
                 <div className="shrink-0 space-y-3">
                   {errorBlock}

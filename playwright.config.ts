@@ -21,6 +21,16 @@ export default defineConfig({
       env: {
         ANTHROPIC_API_KEY: "test-key",
         ANTHROPIC_BASE_URL: "http://localhost:3199",
+      },
+    },
+    {
+      // The same app once a Gemini key is added.
+      command: "pnpm exec next start -p 3101",
+      url: "http://localhost:3101/manifest.webmanifest",
+      reuseExistingServer: false,
+      env: {
+        ANTHROPIC_API_KEY: "test-key",
+        ANTHROPIC_BASE_URL: "http://localhost:3199",
         GEMINI_API_KEY: "test-key",
         GOOGLE_GEMINI_BASE_URL: "http://localhost:3199",
       },
