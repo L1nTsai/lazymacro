@@ -20,6 +20,7 @@ export default async function MePage() {
           <NavRow href="/me/avoid" label="Foods to avoid" detail={count(allergies.length + excluded.length)} />
           <NavRow href="/me/staples" label="Pantry staples" detail={count(staples.length)} />
           <NavRow href="/me/units" label="Units" />
+          <NavRow href="/me/saved" label="Saved foods" />
           <NavRow href="/foods" label="Search foods" />
           <NavRow href="/me/data" label="Your data" />
           <NavRow href="/me/account" label="Account" />

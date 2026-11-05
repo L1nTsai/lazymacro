@@ -1,14 +1,20 @@
-import Link from "next/link";
-import { BUTTON_STYLES, PageTitle } from "@/components/ui";
+import { Suspense } from "react";
+import { LogFlow } from "@/components/log/log-flow";
+import { PageSlide } from "@/components/page-slide";
+import { localDate } from "@/lib/date";
+import { loadToday, totals } from "@/lib/day";
 import { requireProfile } from "@/lib/profile";
 
 export default async function LogPage() {
-  await requireProfile();
+  const { userId, timezone } = await requireProfile();
+  const { goal, meals } = await loadToday(userId, timezone);
+  const budget = { today: localDate(timezone), kcalLeft: goal ? goal.kcal - totals(meals).kcal : null };
+
   return (
-    <div className="space-y-3 px-4 pt-[max(env(safe-area-inset-top),1rem)]">
-      <PageTitle>Log a meal</PageTitle>
-      <p className="text-muted">Voice logging isn&apos;t available yet. It&apos;s the next thing being built. For now, you can look up foods.</p>
-      <Link href="/foods" className={BUTTON_STYLES.secondary}>Search foods</Link>
-    </div>
+    <PageSlide>
+      <Suspense>
+        <LogFlow budget={budget} />
+      </Suspense>
+    </PageSlide>
   );
 }

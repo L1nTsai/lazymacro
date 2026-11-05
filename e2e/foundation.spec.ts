@@ -250,7 +250,7 @@ test("logged meals fill the ring and bars, and live on their own pages", async (
   await page.getByRole("link", { name: /Meals/ }).click();
   await page.getByRole("link", { name: /Breakfast/ }).click();
   await expect(page.getByRole("heading", { name: "Breakfast" })).toBeVisible();
-  await expect(page.getByText("test food 1")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Items" }).getByRole("link").first()).toContainText("1100 kcal");
 
   // A long meal pages instead of scrolling.
   logMeal(email, "breakfast", 1, 0, 0, 0, 25);

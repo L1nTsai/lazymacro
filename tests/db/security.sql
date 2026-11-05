@@ -111,6 +111,87 @@ begin
   end;
 end $$;
 
+-- Confirming meals ---------------------------------------------------------
+reset role;
+select pg_temp.act_as('00000000-0000-4000-8000-00000000000b');
+create function pg_temp.confirm(client uuid, grams numeric, corrected boolean default false) returns jsonb language sql as $$
+  select public.confirm_meals(jsonb_build_array(jsonb_build_object(
+    'client_id', client, 'eaten_on', '2026-11-04', 'meal_type', 'lunch', 'source', 'text', 'transcript', 'x',
+    'items', jsonb_build_array(jsonb_build_object(
+      'food_id', '00000000-0000-4000-8000-0000000000f0', 'phrase', 'test', 'parsed_food', 'Test', 'quantity', grams, 'unit', 'g', 'grams', grams,
+      'corrected', corrected, 'assumptions', '["Assumed"]'::jsonb,
+      -- A tampered request: these must be ignored in favor of the food's values.
+      'kcal', 1, 'protein_g', 1000, 'confidence', 'verified'
+    ))
+  )));
+$$;
+select pg_temp.confirm('00000000-0000-4000-8000-0000000000c1', 250);
+select pg_temp.assert((select kcal from public.log_entries) = 250, 'macros come from the food, not the request');
+select pg_temp.assert((select protein_g from public.log_entries) = 2.5, 'protein comes from the food, not the request');
+select pg_temp.assert((select parsed_food from public.log_entries) = 'test', 'parsed food is lower-cased');
+
+-- Retrying the same confirmation changes nothing.
+select pg_temp.confirm('00000000-0000-4000-8000-0000000000c1', 999);
+select pg_temp.assert((select count(*) from public.meals) = 1, 'retry does not add a meal');
+select pg_temp.assert((select count(*) from public.log_entries) = 1, 'retry does not add an entry');
+select pg_temp.assert((select grams from public.log_entries) = 250, 'retry does not change the entry');
+
+-- Two corrections earn an offer to remember, and a retry doesn't count twice.
+select pg_temp.assert(jsonb_array_length(pg_temp.confirm('00000000-0000-4000-8000-0000000000c2', 10, true) -> 'remember_offers') = 0, 'first correction: no offer');
+select pg_temp.assert(jsonb_array_length(pg_temp.confirm('00000000-0000-4000-8000-0000000000c2', 10, true) -> 'remember_offers') = 0, 'retried correction: no offer');
+select pg_temp.assert((select times from public.user_corrections) = 1, 'retried correction counted once');
+select pg_temp.assert(jsonb_array_length(pg_temp.confirm('00000000-0000-4000-8000-0000000000c3', 10, true) -> 'remember_offers') = 1, 'second correction: offer');
+
+-- Editing recomputes from the food, and removing the last entry removes the meal.
+select public.update_log_entry((select id from public.log_entries where grams = 250), '00000000-0000-4000-8000-0000000000f0', 100, 'g', 100);
+select pg_temp.assert((select kcal from public.log_entries where grams = 100) = 100, 'edit recomputes macros');
+
+-- A different person can't confirm into, edit or delete these rows.
+reset role;
+select pg_temp.new_user('00000000-0000-4000-8000-00000000000c', 'c@security-test.lazymacro.test');
+select pg_temp.act_as('00000000-0000-4000-8000-00000000000c');
+do $$
+declare target uuid;
+begin
+  reset role;
+  select id into target from public.log_entries where grams = 100;
+  perform pg_temp.act_as('00000000-0000-4000-8000-00000000000c');
+  begin
+    perform public.update_log_entry(target, '00000000-0000-4000-8000-0000000000f0', 1, 'g', 1);
+    raise exception 'FAILED: another person edited an entry';
+  exception when no_data_found then null;
+  end;
+  perform public.delete_log_entry(target);
+  reset role;
+  if not exists (select 1 from public.log_entries where id = target) then
+    raise exception 'FAILED: another person deleted an entry';
+  end if;
+end $$;
+select pg_temp.act_as('00000000-0000-4000-8000-00000000000c');
+select pg_temp.assert((select count(*) from public.log_entries) = 0, 'other people see no entries');
+select pg_temp.assert((select count(*) from public.user_corrections) = 0, 'other people see no corrections');
+
+-- save_food keeps each source to its rules.
+create function pg_temp.food(source text, confidence text, url text default null, source_id text default null) returns jsonb language sql as $$
+  select jsonb_build_object('source', source, 'confidence', confidence, 'source_url', url, 'source_id', source_id, 'name', 'E2E security food ' || source,
+    'kcal_per_100g', 100, 'protein_per_100g', 1, 'carbs_per_100g', 1, 'fat_per_100g', 1);
+$$;
+do $$
+begin
+  begin perform public.save_food(pg_temp.food('custom', 'verified')); raise exception 'FAILED: verified custom food';
+  exception when check_violation then null; end;
+  begin perform public.save_food(pg_temp.food('restaurant', 'verified')); raise exception 'FAILED: restaurant food without link';
+  exception when check_violation then null; end;
+  begin perform public.save_food(pg_temp.food('restaurant', 'rough', 'https://a.test')); raise exception 'FAILED: unverified restaurant food';
+  exception when check_violation then null; end;
+  begin perform public.save_food(pg_temp.food('restaurant', 'verified', 'http://a.test')); raise exception 'FAILED: restaurant food over http';
+  exception when check_violation then null; end;
+  begin perform public.save_food(pg_temp.food('usda', 'verified')); raise exception 'FAILED: usda food without id';
+  exception when check_violation then null; end;
+end $$;
+select pg_temp.assert(public.save_food(pg_temp.food('custom', 'rough')) = public.save_food(pg_temp.food('custom', 'rough')), 'same custom food is not added twice');
+select pg_temp.assert((select confidence from public.foods where name = 'E2E security food custom') = 'rough', 'a rough food stays rough');
+
 -- Signed-out visitors reach nothing.
 reset role;
 select set_config('request.jwt.claims', '', true);
@@ -130,6 +211,16 @@ begin
   begin
     perform public.delete_my_account();
     raise exception 'FAILED: anon called account deletion';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.confirm_meals('[]');
+    raise exception 'FAILED: anon confirmed a meal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.save_food('{}');
+    raise exception 'FAILED: anon saved a food';
   exception when insufficient_privilege then null;
   end;
 end $$;

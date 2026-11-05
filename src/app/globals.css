@@ -143,3 +143,15 @@ textarea {
     animation: none !important;
   }
 }
+
+/* The only loading motion: a bar moving while a meal is being read. */
+@keyframes working {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.working-bar {
+  animation: working 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .working-bar { animation: none; width: 100%; }
+}

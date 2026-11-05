@@ -16,14 +16,15 @@ export default async function MealPage({ params }: { params: Promise<{ type: str
     .flatMap((meal) => meal.log_entries)
     .map((entry) => ({
       id: entry.id,
-      label: entry.phrase ?? `${Number(entry.grams)} g`,
+      label: entry.foods?.name ?? entry.phrase ?? `${Number(entry.grams)} g`,
+      trust: entry.confidence,
       kcal: Math.round(Number(entry.kcal)),
     }));
 
   return (
     <PageSlide>
       <SubPage title={MEAL_LABELS[type as MealType]} back="/meals">
-        {items.length ? <MealItems items={items} /> : <p className="text-sm text-muted">Nothing logged yet.</p>}
+        {items.length ? <MealItems items={items} back={`/meals/${type}`} /> : <p className="text-sm text-muted">Nothing logged yet.</p>}
       </SubPage>
     </PageSlide>
   );

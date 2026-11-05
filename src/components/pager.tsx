@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./ui";
 
+const BAR_HEIGHT = 56;
+
 /**
  * Shows as many fixed-height rows as fit and pages through the rest, because
  * screens don't scroll. Remount with a new key to return to the first page.
@@ -18,27 +20,28 @@ export function Pager<T>({
   renderRow: (item: T) => ReactNode;
   label: string;
 }) {
-  const area = useRef<HTMLDivElement>(null);
-  const [perPage, setPerPage] = useState(1);
+  const container = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(0);
   const [requestedPage, setPage] = useState(0);
 
   useEffect(() => {
-    const element = area.current;
+    const element = container.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => {
-      setPerPage(Math.max(1, Math.floor(element.clientHeight / rowHeight)));
-    });
+    const observer = new ResizeObserver(() => setHeight(element.clientHeight));
     observer.observe(element);
     return () => observer.disconnect();
-  }, [rowHeight]);
+  }, []);
 
-  const pages = Math.max(1, Math.ceil(items.length / perPage));
+  // The Previous and Next bar only takes space when the rows really don't all fit.
+  const fitsWithoutBar = Math.floor(height / rowHeight) >= items.length;
+  const perPage = fitsWithoutBar ? items.length : Math.max(1, Math.floor((height - BAR_HEIGHT) / rowHeight));
+  const pages = Math.max(1, Math.ceil(items.length / Math.max(perPage, 1)));
   const page = Math.min(requestedPage, pages - 1);
   const visible = items.slice(page * perPage, (page + 1) * perPage);
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div ref={area} className="min-h-0 flex-1 overflow-hidden">
+    <div ref={container} className="flex h-full flex-col gap-3">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <ul aria-label={label} className="divide-y divide-border">
           {visible.map((item, index) => (
             <li key={index} style={{ height: rowHeight }} className="overflow-hidden">

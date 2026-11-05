@@ -2,17 +2,21 @@
 
 An in-house, mobile-first web app for logging meals by voice and seeing what's left for the day. It installs to the home screen and only works online.
 
-This branch contains Phase 1, the foundation: sign-in, goals, the USDA food database and the app shell. Voice logging, Fridge and Ideas come next.
+So far it has sign-in, goals, the USDA food database, and logging meals by voice or text with a review step, history, favorites and saved defaults. Fridge and Ideas come next.
 
 ## Run it
 
 ```sh
 pnpm install
-cp .env.example .env.local   # then add the Supabase URL and publishable key
+cp .env.example .env.local   # then fill in the Supabase and AI values
 pnpm dev
 ```
 
 There's no local database. The app and the Supabase CLI both use the live project, so run `supabase link --project-ref <ref>` once.
+
+Voice and text logging need `ANTHROPIC_API_KEY` and a **paid-tier** `GEMINI_API_KEY`, because Google uses free-tier data to improve its products. `USDA_API_KEY` is optional and adds branded foods. Without keys, searching foods and entering label values still work.
+
+The microphone only works over https or on localhost, so testing on a phone over Wi-Fi needs a deployed or tunneled address.
 
 ## Before the team can sign up
 
@@ -52,7 +56,9 @@ Download both from https://fdc.nal.usda.gov/download-datasets/. Use the JSON rel
 | --- | --- | --- |
 | `pnpm test` | Target calculations, USDA parsing, validation | No |
 | `pnpm test:db` | Row-level security, sign-up domains, account deletion | Yes, but everything is rolled back |
-| `pnpm build && pnpm test:e2e` | The full app in iPhone and Android browser engines | Yes. Creates temporary accounts on a test domain, then removes them. Sends no email |
+| `pnpm build && pnpm test:e2e` | The full app in iPhone and Android browser engines | Yes. Creates temporary accounts and foods, then removes them. Sends no email. Claude and Gemini are replaced by a local stand-in, so it costs nothing and doesn't test real AI quality |
+| `pnpm eval:check` | Every answer in the evaluation set exists in the food table | Reads only |
+| `pnpm eval` | Real parsing and matching accuracy, against the 85% target | Reads only, but calls Claude and costs a few cents |
 
 ## Design rules
 
@@ -66,10 +72,12 @@ Download both from https://fdc.nal.usda.gov/download-datasets/. Use the JSON rel
 
 ## Nutrition rules
 
-Macros come from the database. An AI estimate is the last resort, used only when no database source has the food. See the product plan for the full order of sources.
+Macros come from the database. Each food goes through these sources in order: personal aliases and last choices, team-saved foods, USDA, USDA branded, the chain's official page, built from database ingredients, then an AI estimate as the last resort. Restaurant items try the chain's page right after saved foods. The parser never produces macros, and the database computes them again when a meal is confirmed.
 
 ## Security notes
 
 - Personal data is protected by row-level security in the database, not only by app code.
 - The domain rule is a database trigger, so calling Supabase directly can't get around it.
+- Any signed-in person can add a custom or restaurant food through `save_food`. Its rules stop a custom food being marked verified, but a teammate could still enter wrong numbers, which suits an in-house app.
+- The AI endpoints have size limits but no per-person spending limit yet.
 - Sign-ins go through the app's server, so Supabase's per-IP limit (30 per 5 minutes) is shared by everyone using the app. That caps password guessing, but an attacker could briefly lock people out.

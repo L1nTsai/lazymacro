@@ -10,9 +10,13 @@
     "test": "vitest run",
     "test:db": "supabase db query --linked -f tests/db/security.sql -o json",
     "import:usda": "tsx scripts/import-usda.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "eval": "tsx --env-file=.env.local scripts/eval.ts",
+    "eval:check": "tsx scripts/eval.ts --check"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@google/genai": "^2.32.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "next": "16.4.5",

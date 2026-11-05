@@ -7,6 +7,7 @@ const PERSONAL_TABLES = [
   "user_exclusions",
   "user_staples",
   "user_aliases",
+  "user_corrections",
   "meals",
   "log_entries",
   "favorites",

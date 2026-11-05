@@ -38,7 +38,11 @@ function Tab({ href, label, children }: { href: string; label: string; children:
 
 /** Pushed pages and setup take the whole screen, as they do on iOS. */
 const hidesTabBar = (pathname: string) =>
-  pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/onboarding");
+  pathname.startsWith("/me/") ||
+  pathname.startsWith("/meals") ||
+  pathname.startsWith("/onboarding") ||
+  pathname.startsWith("/log") ||
+  pathname.startsWith("/history");
 
 export function TabBar() {
   const pathname = usePathname();
@@ -54,7 +58,8 @@ export function TabBar() {
         <Tab href="/fridge" label="Fridge">{FRIDGE}</Tab>
         <div className="flex flex-1 justify-center">
           <Link
-            href="/log"
+            href="/log?start=1"
+            transitionTypes={["nav-forward"]}
             aria-label="Log a meal"
             className="-mt-6 flex size-14 items-center justify-center rounded-full border-4 border-background bg-foreground text-background"
           >
