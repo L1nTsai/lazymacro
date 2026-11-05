@@ -473,7 +473,7 @@ test.describe("when the phone's clock differs from the server's", () => {
     await signIn(page, logEmailFor(info.project.name));
     for (const path of ["/", "/log", "/meals", "/history", "/me", "/me/goals", "/foods"]) {
       await page.goto(path);
-      await expect(page.locator("h1").first()).toBeVisible();
+      await expect(page.locator("h1:visible").first()).toBeVisible();
     }
     expect(errors).toEqual([]);
   });
