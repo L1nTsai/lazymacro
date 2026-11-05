@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* Vercel's Geist palette. Neutrals carry the interface. The data colors are
+   only for things that fill in: graphs, bars and status. No shadows or glow. */
+:root {
+  color-scheme: light dark;
+  --background: #ffffff;
+  --foreground: #000000;
+  --muted: #666666;
+  --border: #eaeaea;
+  --border-strong: #999999;
+  --surface: #fafafa;
+  --error: #ee0000;
+
+  --data-calories: #0070f3;
+  --data-protein: #ff0080;
+  --data-carbs: #f5a623;
+  --data-fat: #7928ca;
+  --data-over: #999999;
+  --track: #eaeaea;
+
+  --status-verified: #0070f3;
+  --status-estimated: #f5a623;
+  --status-rough: #7928ca;
+  --on-status: #ffffff;
+  --on-status-amber: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #ffffff;
+    --muted: #a1a1a1;
+    --border: #333333;
+    --border-strong: #666666;
+    --surface: #111111;
+    --error: #ff4d4d;
+
+    --data-calories: #3291ff;
+    --data-protein: #ff4da6;
+    --data-fat: #a970ff;
+    --data-over: #666666;
+    --track: #333333;
+
+    --status-verified: #0070f3;
+    --status-rough: #8a3fe0;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-surface: var(--surface);
+  --color-error: var(--error);
+  --color-track: var(--track);
+  --font-sans: var(--font-geist-sans);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  /* 16px stops iOS Safari zooming in when a field is focused. */
+  font-size: 16px;
+}
