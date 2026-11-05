@@ -9,7 +9,7 @@ export default function SignUpPage() {
       <PageTitle>Create your account</PageTitle>
       <div className="mt-6">
         <AuthForm action={signUp} submitLabel="Create account">
-          <Field label="Company email">
+          <Field label="Gmail address">
             <Input name="email" type="email" autoComplete="email" required />
           </Field>
           <Field label="Password" hint="At least 10 characters.">

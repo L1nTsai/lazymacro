@@ -155,3 +155,21 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .working-bar { animation: none; width: 100%; }
 }
+
+/* On desktop a full-width slide would cross the sidebar, so pages fade instead. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+}
+@keyframes page-fade-out {
+  to { opacity: 0; }
+}
+@media (min-width: 1024px) {
+  ::view-transition-old(.nav-forward),
+  ::view-transition-old(.nav-back) {
+    animation: page-fade-out 120ms ease-out both;
+  }
+  ::view-transition-new(.nav-forward),
+  ::view-transition-new(.nav-back) {
+    animation: page-fade-in 120ms ease-out both;
+  }
+}

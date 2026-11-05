@@ -27,15 +27,18 @@ export default defineConfig({
     },
   ],
   projects: [
-    { name: "iphone-safari", use: { ...devices["iPhone 14"] } },
+    { name: "iphone-safari", testIgnore: /desktop/, use: { ...devices["iPhone 14"] } },
     {
       name: "android-chrome",
+      testIgnore: /desktop/,
       use: {
         ...devices["Pixel 7"],
         launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
       },
     },
     // The smallest screen the no-scrolling rule has to hold on.
-    { name: "small-iphone", use: { ...devices["iPhone SE"] } },
+    { name: "small-iphone", testIgnore: /desktop/, use: { ...devices["iPhone SE"] } },
+    // The smallest desktop window the no-scrolling rule has to hold on.
+    { name: "desktop", testMatch: /desktop/, use: { ...devices["Desktop Chrome"], viewport: { width: 1024, height: 700 } } },
   ],
 });

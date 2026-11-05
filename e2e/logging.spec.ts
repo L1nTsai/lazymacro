@@ -52,6 +52,7 @@ const resetLog = (email: string) =>
     delete from public.user_aliases where user_id = (select id from auth.users where email = '${email}');
     delete from public.user_corrections where user_id = (select id from auth.users where email = '${email}');
     delete from public.favorites where user_id = (select id from auth.users where email = '${email}');
+    delete from public.ai_usage where user_id = (select id from auth.users where email = '${email}');
   `);
 
 const countMeals = (email: string) =>
@@ -391,6 +392,29 @@ test("speaking transcribes on the server and deletes the audio", async ({ page, 
   expect(after.transcribes).toBe(before.transcribes + 1);
   expect(after.deletes).toBe(before.deletes + 1);
   expect(after.unknown).toEqual([]);
+});
+
+test("the daily limit stops AI use but not manual logging", async ({ page }, info) => {
+  const email = logEmailFor(info.project.name);
+  runSql(`
+    insert into public.ai_usage (user_id, day, kind, used)
+    select id, (now() at time zone 'UTC')::date, 'parse', 10 from auth.users where email = '${email}';`);
+  await signIn(page, email);
+  const before = (await mockStats(page)).parse;
+
+  await typeMeal(page, "just milk");
+  await expect(page.locator("p[role=alert]")).toContainText("today's limit of 10");
+  await expect(page.getByLabel("What you ate")).toHaveValue("just milk");
+  await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  expect((await mockStats(page)).parse).toBe(before);
+
+  await page.goto("/log");
+  await page.getByRole("button", { name: "Search foods" }).click();
+  await page.getByLabel("Food name").fill("chicken breast");
+  await page.getByRole("button", { name: /Chicken, breast, boneless, skinless, raw/ }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  expect(countMeals(email)).toBe(1);
 });
 
 test("the mic explains itself when it can't record", async ({ page, browserName }, info) => {

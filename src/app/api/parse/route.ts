@@ -4,6 +4,7 @@ import { parseMealText } from "@/lib/ai/claude";
 import { localDate } from "@/lib/date";
 import { aiErrorResponse, badRequest } from "@/lib/logging/api";
 import { hourIn } from "@/lib/logging/clock";
+import { limitReached } from "@/lib/logging/limit";
 import { parseContext, resolveDeps } from "@/lib/logging/deps";
 import { resolveMeals } from "@/lib/logging/resolve";
 import { createClient, getUserId } from "@/lib/supabase/server";
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = await createClient();
+    const limited = await limitReached(supabase, "parse");
+    if (limited) return limited;
+
     const { data: profile, error } = await supabase.from("profiles").select("timezone").eq("user_id", userId).single();
     if (error) throw error;
 

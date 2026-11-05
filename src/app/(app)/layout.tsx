@@ -6,8 +6,8 @@ import { TabBar } from "@/components/tab-bar";
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-dvh flex-col">
-      <main className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-hidden">{children}</main>
+    <div className="flex h-dvh flex-col lg:flex-row">
+      <main className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-hidden lg:max-w-none">{children}</main>
       <TabBar />
     </div>
   );

@@ -4,9 +4,7 @@ import { Field, Input, PageTitle } from "@/components/ui";
 import { signIn } from "../actions";
 
 const NOTICES: Record<string, string> = {
-  confirmed: "Your email is confirmed. Sign in to continue.",
   deleted: "Your account and data have been deleted.",
-  "link-expired": "That link has expired or was already used. Sign in, or request a new one.",
 };
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {

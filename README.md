@@ -18,25 +18,21 @@ Voice and text logging need `ANTHROPIC_API_KEY` and a **paid-tier** `GEMINI_API_
 
 The microphone only works over https or on localhost, so testing on a phone over Wi-Fi needs a deployed or tunneled address.
 
-## Before the team can sign up
+## Approving people
 
-1. **Allow your email domain.** Sign-up is refused for everyone until a domain is added:
+Anyone with a Gmail address can create an account, but it does nothing until you approve it. There are no emails, so addresses aren't verified: only approve people you've checked with.
 
-   ```sql
-   insert into app_private.allowed_email_domains (domain) values ('yourcompany.com');
-   ```
+- **Approve:** in the Supabase dashboard, open Table Editor, then `signup_approvals`, and tick `approved`.
+- **Forgotten password:** in the SQL Editor, set a temporary one. They can change it under Me, then Account.
 
-2. **Connect an SMTP provider** in Supabase under Authentication > Emails. Without one, Supabase only emails members of the Supabase organization, at about two emails an hour.
-3. **Turn on the custom email templates.** They need SMTP. Add these to `[auth.email]` in `supabase/config.toml` for each of `confirmation`, `recovery` and `email_change`, then run `supabase config push`:
+  ```sql
+  update auth.users set encrypted_password = extensions.crypt('a-temporary-password', extensions.gen_salt('bf'))
+  where email = 'person@gmail.com';
+  ```
 
-   ```toml
-   [auth.email.template.confirmation]
-   subject = "Confirm your LazyMacro email"
-   content_path = "./supabase/templates/confirmation.html"
-   ```
+## Daily limit
 
-   These templates send people to a page where they tap Continue, so company mail scanners opening a link can't use it up.
-4. **When you deploy,** set `site_url` and `additional_redirect_urls` in `supabase/config.toml` to the real address, then push.
+Each person gets 10 logged meals a day from the AI, counted in their time zone, and 10 voice recordings. Searching foods and entering label values don't count. To change it, set `daily_limit` in `use_ai_call` with a new migration. Set a spending limit on the Anthropic key in its console too.
 
 `supabase config push` can't be previewed safely: it applies changes even when you answer no to its prompt.
 
@@ -76,8 +72,8 @@ Macros come from the database. Each food goes through these sources in order: pe
 
 ## Security notes
 
+- Addresses aren't verified, so someone could sign up with an address they don't own. Approval is the check.
 - Personal data is protected by row-level security in the database, not only by app code.
-- The domain rule is a database trigger, so calling Supabase directly can't get around it.
+- The Gmail rule and approvals are enforced in the database, so calling Supabase directly can't get around them.
 - Any signed-in person can add a custom or restaurant food through `save_food`. Its rules stop a custom food being marked verified, but a teammate could still enter wrong numbers, which suits an in-house app.
-- The AI endpoints have size limits but no per-person spending limit yet.
 - Sign-ins go through the app's server, so Supabase's per-IP limit (30 per 5 minutes) is shared by everyone using the app. That caps password guessing, but an attacker could briefly lock people out.

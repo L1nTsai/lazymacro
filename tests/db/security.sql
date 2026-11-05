@@ -32,6 +32,51 @@ end $$;
 insert into app_private.allowed_email_domains (domain) values ('security-test.lazymacro.test');
 select pg_temp.new_user('00000000-0000-4000-8000-00000000000a', 'a@security-test.lazymacro.test');
 select pg_temp.new_user('00000000-0000-4000-8000-00000000000b', 'b@security-test.lazymacro.test');
+-- New accounts start unapproved and can do nothing until the owner approves them.
+select pg_temp.assert((select count(*) from public.signup_approvals where approved = false and email like '%@security-test.lazymacro.test') = 2, 'new accounts start unapproved');
+select pg_temp.act_as('00000000-0000-4000-8000-00000000000a');
+select pg_temp.assert(not public.is_approved(), 'unapproved person is not approved');
+select pg_temp.assert((select count(*) from public.foods) = 0, 'unapproved person sees no foods');
+select pg_temp.assert(public.use_ai_call('parse') = -1, 'unapproved person gets no AI');
+do $$
+begin
+  begin
+    perform public.save_my_setup('{"timezone":"UTC","pace_kg_per_week":0,"show_oz":false}', '{"kcal":2000,"protein_g":150,"carbs_g":200,"fat_g":60}', '[]', '{}', '2026-11-04');
+    raise exception 'FAILED: unapproved person saved setup';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.save_food('{}');
+    raise exception 'FAILED: unapproved person saved a food';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.signup_approvals set approved = true;
+    raise exception 'FAILED: a person approved themselves';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+update public.signup_approvals set approved = true where email like '%@security-test.lazymacro.test';
+
+-- The daily limit stops at 10, and can't be reset by the person using it.
+select pg_temp.act_as('00000000-0000-4000-8000-00000000000a');
+select pg_temp.assert(public.is_approved(), 'approved person is approved');
+do $$
+begin
+  for i in 1..10 loop
+    if public.use_ai_call('parse') <> 10 - i then raise exception 'FAILED: limit count at %', i; end if;
+  end loop;
+  if public.use_ai_call('parse') <> -1 then raise exception 'FAILED: 11th call was allowed'; end if;
+  if public.use_ai_call('transcribe') <> 9 then raise exception 'FAILED: transcribe shares the parse count'; end if;
+  begin
+    delete from public.ai_usage;
+    raise exception 'FAILED: a person reset their usage';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
 select pg_temp.assert(public.is_allowed_signup_email('A@SECURITY-TEST.LAZYMACRO.TEST'), 'domain match ignores case');
 select pg_temp.assert(not public.is_allowed_signup_email('a@evil.test'), 'other domain rejected');
 select pg_temp.assert(not public.is_allowed_signup_email('a@security-test.lazymacro.test.evil.test'), 'lookalike domain rejected');
@@ -149,6 +194,7 @@ select pg_temp.assert((select kcal from public.log_entries where grams = 100) = 
 -- A different person can't confirm into, edit or delete these rows.
 reset role;
 select pg_temp.new_user('00000000-0000-4000-8000-00000000000c', 'c@security-test.lazymacro.test');
+update public.signup_approvals set approved = true where email = 'c@security-test.lazymacro.test';
 select pg_temp.act_as('00000000-0000-4000-8000-00000000000c');
 do $$
 declare target uuid;
@@ -211,6 +257,11 @@ begin
   begin
     perform public.delete_my_account();
     raise exception 'FAILED: anon called account deletion';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.use_ai_call('parse');
+    raise exception 'FAILED: anon used an AI call';
   exception when insufficient_privilege then null;
   end;
   begin

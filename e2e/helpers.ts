@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-export const PROJECTS = ["iphone-safari", "android-chrome", "small-iphone"];
+export const PROJECTS = ["iphone-safari", "android-chrome", "small-iphone", "desktop"];
+/** Real sign-ups need a real domain. No email is sent, and teardown removes them. */
+export const SIGNUP_PREFIX = "lazymacro.e2e.signup";
 export const TEST_DOMAIN = "e2e.lazymacro.test";
 export const TEST_PASSWORD = "e2e-temporary-password";
 export const emailFor = (project: string) => `${project}@${TEST_DOMAIN}`;
@@ -23,7 +25,7 @@ export function runSql(statement: string) {
 
 export const removeTestData = () =>
   runSql(`
-    delete from auth.users where email like '%@${TEST_DOMAIN}';
+    delete from auth.users where email like '%@${TEST_DOMAIN}' or email like '${SIGNUP_PREFIX}%@gmail.com';
     delete from public.foods where lower(name) like 'e2e %';
     delete from app_private.allowed_email_domains where domain = '${TEST_DOMAIN}';
   `);

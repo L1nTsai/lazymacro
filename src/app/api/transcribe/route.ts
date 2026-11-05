@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { geminiMimeType, transcribeAudio } from "@/lib/ai/gemini";
 import { aiErrorResponse, badRequest } from "@/lib/logging/api";
+import { limitReached } from "@/lib/logging/limit";
+import { createClient } from "@/lib/supabase/server";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -16,6 +18,9 @@ export async function POST(request: NextRequest) {
 
   const mimeType = geminiMimeType(audio.type);
   if (!mimeType) return badRequest("This browser's audio format isn't supported. Type your meal instead.");
+
+  const limited = await limitReached(await createClient(), "transcribe");
+  if (limited) return limited;
 
   try {
     return NextResponse.json({ transcript: await transcribeAudio(audio, mimeType) });

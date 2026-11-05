@@ -32,5 +32,5 @@ export default function globalSetup() {
       select user_id, current_date - 30, 2000, 100, 250, 60 from p;`,
     )
     .join("\n");
-  runSql(`insert into app_private.allowed_email_domains (domain) values ('${TEST_DOMAIN}');\n${users}\n${profiles}`);
+  runSql(`insert into app_private.allowed_email_domains (domain) values ('${TEST_DOMAIN}');\n${users}\nupdate public.signup_approvals set approved = true where email like '%@${TEST_DOMAIN}';\n${profiles}`);
 }

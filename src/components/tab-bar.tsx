@@ -28,7 +28,7 @@ function Tab({ href, label, children }: { href: string; label: string; children:
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs ${active ? "font-medium text-foreground" : "text-muted"}`}
+      className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:rounded-md lg:px-3 lg:text-sm ${active ? "font-medium text-foreground lg:bg-surface" : "text-muted"}`}
     >
       {children}
       {label}
@@ -36,27 +36,33 @@ function Tab({ href, label, children }: { href: string; label: string; children:
   );
 }
 
-/** Pushed pages and setup take the whole screen, as they do on iOS. */
-const hidesTabBar = (pathname: string) =>
-  pathname.startsWith("/me/") ||
-  pathname.startsWith("/meals") ||
-  pathname.startsWith("/onboarding") ||
-  pathname.startsWith("/log") ||
-  pathname.startsWith("/history");
+/** Pushed pages take the whole phone screen, as on iOS. Desktop keeps its sidebar. */
+const hideOnPhone = (pathname: string) =>
+  pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/log") || pathname.startsWith("/history");
 
 export function TabBar() {
   const pathname = usePathname();
-  if (hidesTabBar(pathname)) return null;
+  // Setup comes before the app exists for this person, so it has no navigation.
+  if (pathname.startsWith("/onboarding")) return null;
   return (
     <nav
       aria-label="Main"
       style={{ viewTransitionName: "tab-bar" }}
-      className="shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
+      className={`${hideOnPhone(pathname) ? "hidden lg:flex" : "flex"} order-last shrink-0 flex-col border-t border-border bg-background pb-[env(safe-area-inset-bottom)] lg:order-first lg:h-dvh lg:w-56 lg:gap-6 lg:border-t-0 lg:border-r lg:p-4`}
     >
-      <div className="mx-auto flex max-w-lg items-center px-2">
+      <p className="hidden px-3 pt-1 text-lg font-semibold tracking-tight lg:block">LazyMacro</p>
+      <Link
+        href="/log?start=1"
+        transitionTypes={["nav-forward"]}
+        aria-label="Log a meal"
+        className="hidden min-h-11 items-center justify-center gap-2 rounded-md bg-foreground text-sm font-medium text-background lg:flex"
+      >
+        Log a meal
+      </Link>
+      <div className="mx-auto flex w-full max-w-lg items-center px-2 lg:mx-0 lg:max-w-none lg:flex-col lg:items-stretch lg:gap-1 lg:px-0">
         <Tab href="/" label="Today">{TODAY}</Tab>
         <Tab href="/fridge" label="Fridge">{FRIDGE}</Tab>
-        <div className="flex flex-1 justify-center">
+        <div className="flex flex-1 justify-center lg:hidden">
           <Link
             href="/log?start=1"
             transitionTypes={["nav-forward"]}

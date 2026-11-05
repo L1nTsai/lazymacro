@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { TEST_PASSWORD, emailFor, runSql } from "./helpers";
+import { SIGNUP_PREFIX, TEST_PASSWORD, emailFor, runSql } from "./helpers";
 
 async function signIn(page: Page, email: string, password = TEST_PASSWORD) {
   await page.goto("/sign-in");
@@ -72,29 +72,48 @@ test("the signed-out app only offers sign-in", async ({ page, request }) => {
   expect((await request.get("/api/me/export")).status()).toBe(401);
 });
 
-test("sign-up refuses other email domains", async ({ page }) => {
+test("sign-up refuses anything but Gmail", async ({ page }) => {
   await page.goto("/sign-up");
   await expectDesignRules(page);
-  await page.getByLabel("Company email").fill("someone@outside.test");
+  await page.getByLabel("Gmail address").fill("someone@outside.test");
   await page.getByLabel("Password").fill("long-enough-password");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.locator("p[role=alert]")).toHaveText("Use your company email address to sign up.");
+  await expect(page.locator("p[role=alert]")).toHaveText("Use a Gmail address to sign up.");
   await expect(page).toHaveURL(/\/sign-up$/);
 });
 
-test("bad credentials and bad links end somewhere useful", async ({ page }, info) => {
+test("a new Gmail account can do nothing until it's approved", async ({ page }, info) => {
+  const email = `${SIGNUP_PREFIX}.${info.project.name}@gmail.com`;
+  await page.goto("/sign-up");
+  await page.getByLabel("Gmail address").fill(email);
+  await page.getByLabel("Password").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page).toHaveURL(/\/waiting$/);
+  await expect(page.getByRole("heading", { name: "Waiting for approval" })).toBeVisible();
+  await expectDesignRules(page);
+  await page.screenshot({ path: `test-results/${info.project.name}-waiting.png` });
+
+  for (const path of ["/", "/onboarding", "/me", "/log", "/foods"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/waiting$/);
+  }
+  const blocked = await page.request.post("/api/parse", { data: { text: "an apple", source: "text" } });
+  expect(blocked.status()).toBe(429);
+  expect((await (await page.request.get("/api/foods/search?q=oats")).json()).foods).toEqual([]);
+
+  // Ticking the box in the dashboard is all it takes.
+  runSql(`update public.signup_approvals set approved = true where email = '${email}'`);
+  await page.getByRole("link", { name: "Check again" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("bad credentials explain themselves, and forgetting a password has an answer", async ({ page }, info) => {
   await signIn(page, emailFor(info.project.name), "wrong-password-here");
   await expect(page.locator("p[role=alert]")).toHaveText("That email or password is incorrect.");
-
-  await page.goto("/auth/callback?code=not-a-real-code");
-  await expect(page).toHaveURL(/\/sign-in\?notice=confirmed$/);
-
-  await page.goto("/auth/callback?code=not-a-real-code&next=https://evil.test");
-  await expect(page).toHaveURL(/localhost:3100\/sign-in/);
-
-  await page.goto("/auth/confirm?token_hash=not-a-real-token&type=signup");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page).toHaveURL(/\/sign-in\?notice=link-expired$/);
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+  await expectDesignRules(page);
 });
 
 test("the app can be installed", async ({ request }) => {
@@ -370,6 +389,12 @@ test("signing out ends access, and deleting removes the account", async ({ page 
   await signIn(page, emailFor(info.project.name));
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
   await page.goto("/me/account");
+  // A temporary password from the owner can be replaced here.
+  await page.getByText("Change password").click();
+  await page.getByLabel("New password").fill("e2e-changed-password");
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByText("Password changed.")).toBeVisible();
+  await page.getByText("Change password").click();
   await page.getByText("Delete account").click();
   await expectDesignRules(page);
   await page.getByRole("button", { name: "Delete my account" }).click();

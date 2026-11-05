@@ -215,7 +215,10 @@ export function SetupFlow({
   }, [index]);
 
   useEffect(() => {
-    if (state.saved) router.push(next, { transitionTypes: [direction] });
+    if (!state.saved) return;
+    router.push(next, { transitionTypes: [direction] });
+    // On desktop the settings menu stays on screen, and its numbers just changed.
+    router.refresh();
   }, [state, router, next, direction]);
 
   const onSubmit = (event: FormEvent) => {
@@ -230,7 +233,7 @@ export function SetupFlow({
     <form
       action={formAction}
       onSubmit={onSubmit}
-      className="flex h-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)]"
+      className="mx-auto flex h-full w-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)] lg:max-w-xl lg:py-6"
     >
       <input type="hidden" name="payload" value={payload} />
 

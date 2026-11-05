@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const SIGNED_OUT_PAGES = ["/sign-in", "/sign-up", "/forgot-password", "/check-email"];
+const SIGNED_OUT_PAGES = ["/sign-in", "/sign-up", "/forgot-password"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -25,8 +25,6 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims);
   const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith("/auth/")) return response;
 
   const redirectTo = (path: string) => {
     const url = request.nextUrl.clone();

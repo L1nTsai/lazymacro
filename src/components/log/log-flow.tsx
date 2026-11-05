@@ -444,7 +444,7 @@ export function LogFlow({ budget }: { budget: Budget }) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className="mx-auto flex h-full w-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)] lg:max-w-xl lg:py-6">
       <div className="-ml-3 flex h-11 shrink-0 items-center">
         {stage === "capture" ? (
           <Link href="/" transitionTypes={["nav-back"]} aria-label="Back" className="flex size-11 items-center justify-center"><Chevron direction="left" /></Link>

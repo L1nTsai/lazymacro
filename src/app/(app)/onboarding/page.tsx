@@ -3,11 +3,11 @@ import { PageSlide } from "@/components/page-slide";
 import { SetupFlow } from "@/components/setup-flow";
 import { SETUP_STEPS } from "@/lib/setup";
 import { loadSetupDefaults } from "@/lib/setup-defaults";
-import { createClient, getUserId } from "@/lib/supabase/server";
+import { requireApproved } from "@/lib/profile";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function OnboardingPage() {
-  const userId = await getUserId();
-  if (!userId) redirect("/sign-in");
+  const userId = await requireApproved();
 
   const supabase = await createClient();
   const { defaults, complete } = await loadSetupDefaults(supabase, userId);

@@ -118,9 +118,9 @@ export function NavList({ children }: { children: ReactNode }) {
 }
 
 /** A pushed page: a back arrow, a title, and content that fills what's left. */
-export function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
+export function SubPage({ title, back, children, wide = false }: { title: string; back: string; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="flex h-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className={`mx-auto flex h-full w-full ${wide ? "lg:max-w-5xl" : "lg:max-w-xl"} flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)] lg:py-6`}>
       <Link
         href={back}
         transitionTypes={["nav-back"]}
