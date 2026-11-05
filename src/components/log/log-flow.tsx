@@ -162,6 +162,8 @@ export function LogFlow({ budget, browserVoice }: { budget: Budget; browserVoice
 
   const finish = useCallback(() => {
     router.push("/", { transitionTypes: ["nav-back"] });
+    // A meal was saved, so cached totals on every page are out of date.
+    router.refresh();
   }, [router]);
 
   const parse = useCallback(

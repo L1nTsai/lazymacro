@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Keeps visited pages in the browser so tabs open instantly. Anything that
+    // changes data calls router.refresh(), which clears this straight away.
+    staleTimes: { dynamic: 300, static: 300 },
+  },
   turbopack: {
     rules: {
       "*.css": {

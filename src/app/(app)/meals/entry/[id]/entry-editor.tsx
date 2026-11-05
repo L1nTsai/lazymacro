@@ -30,6 +30,8 @@ export function EntryEditor({ id, back, initial }: { id: string; back: string; i
 
   const leave = () => {
     router.push(back, { transitionTypes: ["nav-back"] });
+    // An entry changed, so cached totals on every page are out of date.
+    router.refresh();
   };
 
   const send = async (method: "PATCH" | "DELETE") => {

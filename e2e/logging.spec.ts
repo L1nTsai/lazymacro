@@ -463,6 +463,39 @@ for (const [script, message] of [
   });
 }
 
+test("visited tabs open without calling the server, and new data still shows at once", async ({ page }, info) => {
+  await signIn(page, logEmailFor(info.project.name));
+  const tab = (name: string) => page.getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true });
+  for (const name of ["Me", "Fridge", "Today"]) {
+    await tab(name).click();
+    await expect(tab(name)).toHaveAttribute("aria-current", "page");
+  }
+  await expect(page.getByRole("link", { name: /^Meals/ })).toContainText("Nothing logged yet");
+
+  // A second round comes from memory. Links on these pages may still prefetch
+  // their own destinations, so this only counts requests for the tabs themselves.
+  const calls: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.searchParams.has("_rsc") && ["/", "/me", "/fridge"].includes(url.pathname)) calls.push(request.url());
+  });
+  for (const name of ["Me", "Fridge", "Today"]) {
+    await tab(name).click();
+    await expect(tab(name)).toHaveAttribute("aria-current", "page");
+  }
+  expect(calls).toEqual([]);
+
+  // Logging a meal must show everywhere immediately, despite the cache.
+  await tab("Me").click();
+  await page.getByRole("link", { name: "Log a meal" }).locator("visible=true").click();
+  await page.getByRole("button", { name: "Type instead" }).click();
+  await page.getByLabel("What you ate").fill("just milk");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Meals/ })).not.toContainText("Nothing logged yet");
+});
+
 test.describe("when the phone's clock differs from the server's", () => {
   // Half a day from UTC, so a clock read in both places can't agree.
   test.use({ timezoneId: "Pacific/Kiritimati" });

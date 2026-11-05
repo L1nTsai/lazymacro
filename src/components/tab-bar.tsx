@@ -27,6 +27,7 @@ function Tab({ href, label, children }: { href: string; label: string; children:
   return (
     <Link
       href={href}
+      prefetch
       aria-current={active ? "page" : undefined}
       className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:rounded-md lg:px-3 lg:text-sm ${active ? "font-medium text-foreground lg:bg-surface" : "text-muted"}`}
     >

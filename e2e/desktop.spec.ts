@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { TEST_PASSWORD, logEmailFor, runSql } from "./helpers";
+import { TEST_PASSWORD, emailFor, logEmailFor, runSql } from "./helpers";
 
 /** The same rules as on phones, at a small laptop window. */
 async function expectDesignRules(page: Page) {
@@ -117,4 +117,35 @@ test("logging a meal works from the sidebar", async ({ page }, info) => {
   await expect(page.getByRole("button", { name: "Next" })).toHaveCount(0);
   await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-review.png` });
+});
+
+test("signing out clears the cache, so the next person sees nothing of the last", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("link", { name: "Me", exact: true }).click();
+  await page.getByRole("link", { name: /Account/ }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/sign-in$/);
+
+  // Stay in the same tab, so anything cached would still be in memory.
+  await page.getByLabel("Email").fill(emailFor("desktop"));
+  await page.getByLabel("Password").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(page.getByText("Logger")).toHaveCount(0);
+});
+
+test("saving a setting shows on a cached page", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("link", { name: "Me", exact: true }).click();
+  await page.getByRole("link", { name: /Pantry staples/ }).click();
+  await nav.getByRole("link", { name: "Today", exact: true }).click();
+  await nav.getByRole("link", { name: "Me", exact: true }).click();
+  const row = page.getByRole("link", { name: /Foods to avoid/ });
+  await row.click();
+  await page.getByLabel("Allergies").fill("peanuts");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(row).toContainText("1");
+  await nav.getByRole("link", { name: "Today", exact: true }).click();
+  await nav.getByRole("link", { name: "Me", exact: true }).click();
+  await expect(row).toContainText("1");
 });
