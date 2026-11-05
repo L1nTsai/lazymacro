@@ -463,6 +463,22 @@ for (const [script, message] of [
   });
 }
 
+test.describe("when the phone's clock differs from the server's", () => {
+  // Half a day from UTC, so a clock read in both places can't agree.
+  test.use({ timezoneId: "Pacific/Kiritimati" });
+
+  test("pages load without the two disagreeing", async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await signIn(page, logEmailFor(info.project.name));
+    for (const path of ["/", "/log", "/meals", "/history", "/me", "/me/goals", "/foods"]) {
+      await page.goto(path);
+      await expect(page.locator("h1").first()).toBeVisible();
+    }
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("once a Gemini key is added", () => {
   test.use({ baseURL: "http://localhost:3101" });
 

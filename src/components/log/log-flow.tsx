@@ -7,7 +7,6 @@ import { Pager } from "@/components/pager";
 import { Button, Chevron, Field, FormError, Input, NavList, Select, TrustBadge } from "@/components/ui";
 import { newClientId } from "@/lib/client-id";
 import { macrosFor, servingToPer100g } from "@/lib/logging/amounts";
-import { mealFromHour } from "@/lib/logging/clock";
 import type { DraftFood, DraftItem, DraftMeal } from "@/lib/logging/types";
 import { AmountEditor, recalculate } from "./amount-editor";
 import { FoodPicker } from "./food-picker";
@@ -15,7 +14,7 @@ import { useBrowserSpeech } from "./use-browser-speech";
 import { useRecorder } from "./use-recorder";
 
 type Stage = "capture" | "type" | "working" | "review" | "item" | "swap" | "add" | "label" | "favorite-name" | "favorites" | "remember";
-type Budget = { today: string; kcalLeft: number | null };
+type Budget = { today: string; kcalLeft: number | null; currentMeal: DraftMeal["mealType"] };
 type Favorite = { id: string; name: string; kcal: number };
 type Offer = { phrase: string; food_id: string; food_name: string };
 
@@ -276,9 +275,8 @@ export function LogFlow({ budget, browserVoice }: { budget: Budget; browserVoice
 
   const addFood = (food: DraftFood) => {
     if (!meal) {
-      const hour = new Date().getHours();
       const item = draftItemFor(food);
-      setMeals([{ clientId: newClientId(), eatenOn: budget.today, mealType: mealFromHour(hour), source: "manual", transcript: null, items: [item] }]);
+      setMeals([{ clientId: newClientId(), eatenOn: budget.today, mealType: budget.currentMeal, source: "manual", transcript: null, items: [item] }]);
       setMealIndex(0);
     } else {
       updateMeal({ items: [...meal.items, draftItemFor(food)] });
@@ -317,7 +315,7 @@ export function LogFlow({ budget, browserVoice }: { budget: Budget; browserVoice
     };
     const item = { ...draftItemFor(food), quantity: 1, unit: "serving", grams };
     if (!meal) {
-      setMeals([{ clientId: newClientId(), eatenOn: budget.today, mealType: mealFromHour(new Date().getHours()), source: "manual", transcript: null, items: [item] }]);
+      setMeals([{ clientId: newClientId(), eatenOn: budget.today, mealType: budget.currentMeal, source: "manual", transcript: null, items: [item] }]);
       setMealIndex(0);
     } else {
       updateMeal({ items: [...meal.items, item] });
@@ -439,7 +437,7 @@ export function LogFlow({ budget, browserVoice }: { budget: Budget; browserVoice
 
   const totals = meal ? totalsOf(meal.items) : null;
   const leftAfter = budget.kcalLeft !== null && meal?.eatenOn === budget.today && totals ? budget.kcalLeft - totals.kcal : null;
-  const yesterdayMeal = mealFromHour(new Date().getHours());
+  const yesterdayMeal = budget.currentMeal;
   const backStage = (stage === "item" || stage === "add" || stage === "favorite-name") ? "review" : stage === "swap" ? "item" : stage === "label" ? "add" : stage === "type" || stage === "favorites" ? "capture" : stage === "review" ? (mealIndex > 0 ? "review" : "capture") : null;
 
   const title: Record<Stage, string> = {

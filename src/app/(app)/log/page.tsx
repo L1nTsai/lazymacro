@@ -3,12 +3,18 @@ import { LogFlow } from "@/components/log/log-flow";
 import { PageSlide } from "@/components/page-slide";
 import { localDate } from "@/lib/date";
 import { loadToday, totals } from "@/lib/day";
+import { hourIn, mealFromHour } from "@/lib/logging/clock";
 import { requireProfile } from "@/lib/profile";
 
 export default async function LogPage() {
   const { userId, timezone } = await requireProfile();
   const { goal, meals } = await loadToday(userId, timezone);
-  const budget = { today: localDate(timezone), kcalLeft: goal ? goal.kcal - totals(meals).kcal : null };
+  // Comes from the profile's time zone, so server and browser always agree.
+  const budget = {
+    today: localDate(timezone),
+    kcalLeft: goal ? goal.kcal - totals(meals).kcal : null,
+    currentMeal: mealFromHour(hourIn(timezone)),
+  };
 
   return (
     <PageSlide>
