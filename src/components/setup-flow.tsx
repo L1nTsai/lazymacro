@@ -216,9 +216,9 @@ export function SetupFlow({
 
   useEffect(() => {
     if (!state.saved) return;
-    router.push(next, { transitionTypes: [direction] });
-    // On desktop the settings menu stays on screen, and its numbers just changed.
+    // Settings changed, so clear cached pages before going to one of them.
     router.refresh();
+    router.push(next, { transitionTypes: [direction] });
   }, [state, router, next, direction]);
 
   const onSubmit = (event: FormEvent) => {

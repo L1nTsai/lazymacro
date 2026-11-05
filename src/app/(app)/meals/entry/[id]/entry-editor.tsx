@@ -29,9 +29,10 @@ export function EntryEditor({ id, back, initial }: { id: string; back: string; i
   };
 
   const leave = () => {
-    router.push(back, { transitionTypes: ["nav-back"] });
-    // An entry changed, so cached totals on every page are out of date.
+    // An entry changed, so clear cached pages first; otherwise the list we're
+    // going to would come from the cache with the old numbers.
     router.refresh();
+    router.push(back, { transitionTypes: ["nav-back"] });
   };
 
   const send = async (method: "PATCH" | "DELETE") => {

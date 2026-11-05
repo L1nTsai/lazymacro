@@ -104,7 +104,7 @@ test("a new Gmail account can do nothing until it's approved", async ({ page }, 
 
   // Ticking the box in the dashboard is all it takes.
   runSql(`update public.signup_approvals set approved = true where email = '${email}'`);
-  await page.getByRole("link", { name: "Check again" }).click();
+  await page.getByRole("button", { name: "Check again" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
 });
 
