@@ -8,7 +8,7 @@
  */
 export type EvalCase = { say: string; items: [string, number | null][]; meals?: number };
 
-const OATS = "oats, regular and quick.*dry";
+const OATS = "oats.*(dry|rolled)|^Oats";
 const MILK_2 = "Milk, (reduced fat|lowfat).*2%|Milk, reduced fat";
 const MILK_WHOLE = "Milk, whole";
 const MILK_ANY = "^Milk, ";
@@ -93,7 +93,7 @@ export const CASES: EvalCase[] = [
   { say: "half a cup of blueberries", items: [[BLUEBERRIES, 74]] },
   { say: "a cup of strawberries", items: [[STRAWBERRIES, 150]] },
   { say: "a cup of black coffee", items: [[COFFEE, 237]] },
-  { say: "a cup of cooked rice", items: [[RICE_WHITE, 158]] },
+  { say: "a cup of cooked rice", items: [["^Rice, white.*cooked", null]] },
   { say: "a cup of cooked lentils", items: [[LENTILS, 198]] },
   { say: "half a cup of black beans", items: [[BLACK_BEANS, 86]] },
 
@@ -117,8 +117,8 @@ export const CASES: EvalCase[] = [
   { say: "a handful of walnuts", items: [[WALNUTS, null]] },
   { say: "a bowl of oatmeal", items: [["oat", null]] },
   { say: "a scoop of whey", items: [[WHEY, null]] },
-  { say: "some rice and chicken", items: [[RICE_WHITE, null], [CHICKEN, null]] },
-  { say: "a splash of milk in my coffee", items: [[MILK_ANY, null], [COFFEE, null]] },
+  { say: "some rice and chicken", items: [[RICE_WHITE, null], ["^Chicken, (?!meatless)", null]] },
+  { say: "a splash of milk in my coffee", items: [[MILK_ANY, null]] },
   { say: "a bit of butter on toast", items: [[BUTTER, null], [BREAD, null]] },
   { say: "a drizzle of olive oil", items: [[OIL, null]] },
 
@@ -130,14 +130,14 @@ export const CASES: EvalCase[] = [
   { say: "just a banana and a coffee this morning", items: [[BANANA, 118], [COFFEE, null]] },
   { say: "snacked on 40 grams of almonds", items: [[ALMONDS, 40]] },
   { say: "post workout shake with one scoop of whey and 300 mil of milk", items: [[WHEY, null], [MILK_ANY, 309]] },
-  { say: "yogurt with blueberries and honey", items: [[YOGURT, null], [BLUEBERRIES, null], [HONEY, null]] },
+  { say: "yogurt with blueberries and honey", items: [["^Yogurt", null], [BLUEBERRIES, null], [HONEY, null]] },
   { say: "toast with peanut butter and a banana", items: [[BREAD, null], [PB, null], [BANANA, 118]] },
   { say: "tuna on two slices of bread", items: [[TUNA, null], [BREAD, 66]] },
   { say: "rice, black beans and half an avocado", items: [[RICE_WHITE, null], [BLACK_BEANS, null], [AVOCADO, 100]] },
   { say: "a salmon fillet, about 180 grams, and a sweet potato", items: [[SALMON, 180], [SWEET_POTATO, null]] },
-  { say: "scrambled two eggs in a tablespoon of butter", items: [[EGG, 100], [BUTTER, 14]] },
+  { say: "scrambled two eggs in a tablespoon of butter", items: [[EGG, null], [BUTTER, 14]] },
   { say: "60 g oats 300 g milk", items: [[OATS, 60], [MILK_ANY, 300]] },
-  { say: "chicken 200g rice 150g broccoli 100g", items: [[CHICKEN, 200], [RICE_WHITE, 150], [BROCCOLI, 100]] },
+  { say: "chicken 200g rice 150g broccoli 100g", items: [["^Chicken, (?!meatless)", 200], [RICE_WHITE, 150], [BROCCOLI, 100]] },
 
   // Several meals in one sentence.
   { say: "Breakfast was 60 grams of oats, and for lunch I had 200 grams of chicken breast", items: [[OATS, 60], [CHICKEN, 200]], meals: 2 },

@@ -14,6 +14,7 @@ describe("toGrams", () => {
   });
   it("converts volume with density, and milk at about 1.03 g/ml", () => {
     expect(toGrams(300, "ml", milk).grams).toBe(309);
+    expect(toGrams(300, "mil", milk).grams).toBe(309);
   });
   it("prefers the food's own measured cup over density", () => {
     expect(toGrams(2, "cups", milk)).toEqual({ grams: 488, assumption: null });
@@ -38,6 +39,19 @@ describe("toGrams", () => {
   });
   it("treats a food's saved serving as known, so a repeat keeps its calories", () => {
     expect(toGrams(1, "serving", { densityGPerMl: null, portions: [{ label: "serving", grams: 123 }] })).toEqual({ grams: 123, assumption: null });
+  });
+  it("uses the parser's size when the database has none, and flags it", () => {
+    expect(toGrams(3, "large", plain, null, 50)).toEqual({ grams: 150, assumption: "Assumed 1 large is 50 g" });
+    expect(toGrams(0.5, "cup", plain, null, 148).grams).toBe(74);
+  });
+  it("prefers the database's own size over the parser's", () => {
+    expect(toGrams(2, "large", egg, null, 999).grams).toBe(100);
+    expect(toGrams(1, "cup", milk, null, 999).grams).toBe(244);
+    expect(toGrams(100, "ml", milk, null, 999).grams).toBe(103);
+  });
+  it("ignores an impossible size from the parser", () => {
+    expect(toGrams(1, "scoop", plain, null, 50000).grams).toBe(30);
+    expect(toGrams(1, "scoop", plain, null, -5).grams).toBe(30);
   });
   it("flags anything it can't size", () => {
     const result = toGrams(2, "thing", plain);

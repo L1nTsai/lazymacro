@@ -6,6 +6,7 @@ export const parsedItemSchema = z.object({
   brand: z.string().nullable(),
   quantity: z.number().nullable(),
   unit: z.string(),
+  grams_per_unit_estimate: z.number().nullable(),
   restaurant: z.string().nullable(),
   modifications: z.array(z.string()),
   assumptions: z.array(z.string()),

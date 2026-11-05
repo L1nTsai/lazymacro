@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { CASES } from "../evals/meals";
 import { buildDish, estimateFood, lookupRestaurant, parseMealText, pickFoods } from "../src/lib/ai/claude";
 import { scoreCase } from "../src/lib/logging/eval-score";
-import { resolveMeals, type ResolveDeps } from "../src/lib/logging/resolve";
+import { resolveMeals, withBroaderSearch, type ResolveDeps } from "../src/lib/logging/resolve";
 import type { DraftFood } from "../src/lib/logging/types";
 
 const TARGET = 0.85;
@@ -72,7 +72,7 @@ const deps: ResolveDeps = {
   alias: async () => null,
   lastChoice: async () => null,
   savedFoods: async () => [],
-  usdaCandidates: async (query) => candidates(query),
+  usdaCandidates: (query) => withBroaderSearch(query, async (q) => candidates(q)),
   brandedFoods: async () => [],
   pickFoods,
   lookupRestaurant,
@@ -92,6 +92,7 @@ async function main() {
   let extras = 0;
   let mealSplitsRight = 0;
   let failedCases = 0;
+  const aiEstimates: string[] = [];
   const durations: number[] = [];
   const failures: string[] = [];
   let next = 0;
@@ -105,6 +106,9 @@ async function main() {
         const { meals } = await resolveMeals(parsed, { today, hour: lunchtime, source: "text", transcript: testCase.say }, deps);
         durations.push(performance.now() - started);
         const score = scoreCase(testCase.items, meals, testCase.meals ?? 1);
+        for (const item of meals.flatMap((meal) => meal.items)) {
+          if (item.food.trust === "rough") aiEstimates.push(`${item.food.name} ("${testCase.say}")`);
+        }
         correct += score.correct;
         total += score.total;
         extras += score.extras;
@@ -124,8 +128,10 @@ async function main() {
   for (const failure of failures) console.log(failure);
   console.log(`\nFirst-try accuracy: ${(accuracy * 100).toFixed(1)}% (${correct} of ${total} items). Target: ${TARGET * 100}%.`);
   console.log(`Invented items: ${extras}. Right number of meals: ${mealSplitsRight} of ${CASES.length}. Cases that errored: ${failedCases}.`);
+  // Every food in this set is in the database, so any estimate breaks the rule.
+  console.log(`AI estimates used: ${aiEstimates.length}. Should be 0.${aiEstimates.length ? `\n  ${aiEstimates.join("\n  ")}` : ""}`);
   if (durations.length) console.log(`Median time, parse and match only: ${(durations[Math.floor(durations.length / 2)] / 1000).toFixed(1)} s. Database lookups here go through the CLI, so the app is faster.`);
-  process.exit(accuracy >= TARGET ? 0 : 1);
+  process.exit(accuracy >= TARGET && aiEstimates.length === 0 ? 0 : 1);
 }
 
 void main();

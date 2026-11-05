@@ -9,6 +9,7 @@ export type ResolveDeps = {
   alias(phrase: string): Promise<{ food: DraftFood; defaultGrams: number | null } | null>;
   lastChoice(parsedFood: string): Promise<DraftFood | null>;
   savedFoods(query: string): Promise<DraftFood[]>;
+  /** Should already include any broader search; see withBroaderSearch. */
   usdaCandidates(query: string): Promise<DraftFood[]>;
   brandedFoods(query: string): Promise<DraftFood[]>;
   pickFoods(items: { phrase: string; food: string; candidates: string[] }[]): Promise<(number | null)[]>;
@@ -21,6 +22,49 @@ export type ResolveContext = { today: string; hour: number; source: "voice" | "t
 
 const normalize = (text: string) => text.trim().toLowerCase();
 
+const MIN_CANDIDATES = 5;
+const MIN_WORD_LENGTH = 3;
+
+/**
+ * USDA words things its own way ("Butter, without salt"), so a search for every
+ * word can miss a food the database has. Searching word by word finds it, which
+ * keeps an AI estimate from being used for a food that's really in the database.
+ */
+export async function withBroaderSearch(query: string, search: (q: string) => Promise<DraftFood[]>): Promise<DraftFood[]> {
+  const exact = await search(query);
+  const words = normalize(query).split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= MIN_WORD_LENGTH);
+  if (exact.length >= MIN_CANDIDATES || words.length < 2) return exact;
+
+  const broader = await Promise.all(words.map(search));
+  const seen = new Set<string>();
+  return [...exact, ...broader.flat()].filter((food) => {
+    if (seen.has(food.name)) return false;
+    seen.add(food.name);
+    return true;
+  });
+}
+
+const SPOKEN_MEASURE = /(\d+(?:\.\d+)?)\s*(kilograms?|kilos?|kg|grams?|gr|g|ounces?|oz|pounds?|lbs?|lb|milliliters?|millilitres?|mils?|mls?|ml|liters?|litres?|l)\b/i;
+const MEASURED_UNITS = /^(g|gr|grams?|kg|kilos?|kilograms?|oz|ounces?|lb|lbs|pounds?|ml|mls?|mils?|milliliters?|millilitres?|l|liters?|litres?)$/i;
+const LARGEST_LIKELY_GRAMS = 2000;
+const LARGEST_LIKELY_COUNT = 20;
+
+/**
+ * The parser occasionally returns the wrong unit. A weight or volume stated in
+ * digits is unambiguous, so it overrides the parser rather than trusting it.
+ */
+export function withStatedWeight(item: ParsedItem): ParsedItem {
+  if (MEASURED_UNITS.test(item.unit.trim())) return { ...item, grams_per_unit_estimate: null };
+  const stated = SPOKEN_MEASURE.exec(item.phrase);
+  if (stated) return { ...item, quantity: Number(stated[1]), unit: stated[2].toLowerCase(), grams_per_unit_estimate: null };
+  // The same large number as both amount and size means the parser put a total
+  // weight in both fields; multiplying them gave 300 g of milk as 90,000 g.
+  if (item.quantity !== null && item.quantity > LARGEST_LIKELY_COUNT && item.quantity === item.grams_per_unit_estimate) {
+    return { ...item, unit: "g", grams_per_unit_estimate: null };
+  }
+  return item;
+}
+
 function itemFrom(
   parsed: ParsedItem,
   food: DraftFood,
@@ -31,9 +75,10 @@ function itemFrom(
   const { grams, assumption } =
     options.grams !== undefined
       ? { grams: options.grams, assumption: null }
-      : toGrams(quantity, unit, food, options.defaultGrams ?? null);
+      : toGrams(quantity, unit, food, options.defaultGrams ?? null, parsed.grams_per_unit_estimate);
   const assumptions = [...(options.assumptions ?? parsed.assumptions)];
   if (assumption) assumptions.push(assumption);
+  if (grams > LARGEST_LIKELY_GRAMS && !MEASURED_UNITS.test(unit.trim())) assumptions.unshift(`${Math.round(grams)} g looks high. Check this amount`);
   return {
     key: randomUUID(),
     phrase: parsed.phrase,
@@ -152,7 +197,8 @@ async function roughEstimate(parsed: ParsedItem, deps: ResolveDeps): Promise<Dra
  * The approved order: aliases and saved foods, USDA, USDA branded, the chain's
  * official page, built from ingredients, and an AI estimate only as a last resort.
  */
-async function resolveItems(items: ParsedItem[], deps: ResolveDeps): Promise<DraftItem[][]> {
+async function resolveItems(parsedItems: ParsedItem[], deps: ResolveDeps): Promise<DraftItem[][]> {
+  const items = parsedItems.map(withStatedWeight);
   const results: (DraftItem[] | null)[] = items.map(() => null);
   const needsPick: { index: number; candidates: DraftFood[] }[] = [];
 

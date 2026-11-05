@@ -8,7 +8,7 @@ const UNIT_ALIASES: Record<string, string> = {
   kilo: "kg", kilos: "kg", kilogram: "kg", kilograms: "kg",
   ounce: "oz", ounces: "oz",
   pound: "lb", pounds: "lb", lbs: "lb",
-  milliliter: "ml", milliliters: "ml", millilitre: "ml", millilitres: "ml",
+  milliliter: "ml", milliliters: "ml", millilitre: "ml", millilitres: "ml", mil: "ml", mils: "ml", mls: "ml", cc: "ml",
   liter: "l", liters: "l", litre: "l", litres: "l",
   teaspoon: "tsp", teaspoons: "tsp",
   tablespoon: "tbsp", tablespoons: "tbsp",
@@ -33,6 +33,7 @@ const TYPICAL_PORTIONS: Record<string, number> = {
 };
 
 const FALLBACK_GRAMS = 100;
+const MAX_ESTIMATED_GRAMS = 2000;
 
 export type Portion = { label: string; grams: number };
 export type AmountFood = { densityGPerMl: number | null; portions: Portion[] };
@@ -65,6 +66,8 @@ export function toGrams(
   unit: string,
   food: AmountFood,
   savedGramsPerUnit: number | null = null,
+  /** The parser's estimate for this food, for when the database has no size. */
+  estimatedGramsPerUnit: number | null = null,
 ): GramsResult {
   const normalized = normalizeUnit(unit);
 
@@ -76,6 +79,12 @@ export function toGrams(
     return { grams: round(quantity * savedGramsPerUnit), assumption: null };
   }
 
+  const estimated = estimatedGramsPerUnit && estimatedGramsPerUnit > 0 && estimatedGramsPerUnit <= MAX_ESTIMATED_GRAMS ? estimatedGramsPerUnit : null;
+  const fromEstimate = (): GramsResult => ({
+    grams: round(quantity * estimated!),
+    assumption: `Assumed 1 ${singular(normalized)} is ${round(estimated!)} g`,
+  });
+
   if (VOLUME_ML[normalized]) {
     const ml = quantity * VOLUME_ML[normalized];
     const exact = findPortion(normalized, food.portions);
@@ -83,6 +92,7 @@ export function toGrams(
       return { grams: round(quantity * exact.grams), assumption: null };
     }
     if (food.densityGPerMl) return { grams: round(ml * food.densityGPerMl), assumption: null };
+    if (estimated) return fromEstimate();
     return { grams: round(ml), assumption: `Assumed 1 ${normalized} weighs about the same as water` };
   }
 
@@ -92,6 +102,8 @@ export function toGrams(
     if (portion.label === "serving") return { grams: round(quantity * portion.grams), assumption: null };
     return { grams: round(quantity * portion.grams), assumption: `Assumed 1 ${normalized} is ${round(portion.grams)} g` };
   }
+
+  if (estimated) return fromEstimate();
 
   const typical = TYPICAL_PORTIONS[singular(normalized)];
   if (typical) {

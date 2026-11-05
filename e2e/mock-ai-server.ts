@@ -13,6 +13,7 @@ const item = (phrase: string, food: string, quantity: number | null, unit: strin
   brand: null,
   quantity,
   unit,
+  grams_per_unit_estimate: null,
   restaurant: null,
   modifications: [],
   assumptions,

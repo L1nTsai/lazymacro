@@ -1,7 +1,7 @@
 import { buildDish, estimateFood, lookupRestaurant, pickFoods } from "../ai/claude";
 import type { createClient } from "../supabase/server";
 import { FOOD_COLUMNS, searchBrandedFoods, searchFoods, toDraftFood } from "./foods-db";
-import type { ResolveDeps } from "./resolve";
+import { withBroaderSearch, type ResolveDeps } from "./resolve";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -38,7 +38,7 @@ export function resolveDeps(supabase: Client, userId: string): ResolveDeps {
     savedFoods: (query) => searchFoods(supabase, query, 20, ["custom", "restaurant"]),
     // Everyday foods can rank as low as 37th for a bare word like "milk", because
     // USDA lists many variants, so the matcher needs a long list to choose from.
-    usdaCandidates: (query) => searchFoods(supabase, query, CANDIDATE_LIMIT, ["usda"]),
+    usdaCandidates: (query) => withBroaderSearch(query, (q) => searchFoods(supabase, q, CANDIDATE_LIMIT, ["usda"])),
     brandedFoods: (query) => searchBrandedFoods(query),
     pickFoods,
     lookupRestaurant,

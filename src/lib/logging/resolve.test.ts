@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ParsedItem, RestaurantResult } from "../ai/schemas";
-import { resolveMeals, type ResolveDeps } from "./resolve";
+import { resolveMeals, withBroaderSearch, withStatedWeight, type ResolveDeps } from "./resolve";
 import type { DraftFood } from "./types";
 
 const usda = (name: string, kcal = 100, extra: Partial<DraftFood> = {}): DraftFood => ({
@@ -25,6 +25,7 @@ const parsed = (food: string, extra: Partial<ParsedItem> = {}): ParsedItem => ({
   brand: null,
   quantity: 100,
   unit: "g",
+  grams_per_unit_estimate: null,
   restaurant: null,
   modifications: [],
   assumptions: [],
@@ -201,6 +202,66 @@ describe("restaurant food", () => {
     const d = deps({ usdaCandidates: vi.fn(async () => [usda("Chicken sandwich")]) });
     const { meals } = await run([sandwich], d);
     expect(meals[0].items[0].food.name).toBe("Chicken sandwich");
+  });
+});
+
+describe("wrong units from the parser", () => {
+  it("trusts a weight stated in digits over the parser's unit", async () => {
+    const d = deps({ usdaCandidates: vi.fn(async () => [usda("Yogurt, Greek")]) });
+    const bad = parsed("greek yogurt", { phrase: "170 grams of plain greek yogurt", quantity: 170, unit: "serving", grams_per_unit_estimate: 170 });
+    const { meals } = await run([bad], d);
+    expect(meals[0].items[0].grams).toBe(170);
+  });
+  it("understands the ways people write weights", () => {
+    const of = (phrase: string) => withStatedWeight(parsed("x", { phrase, unit: "serving" }));
+    expect(of("60g oats")).toMatchObject({ quantity: 60, unit: "g" });
+    expect(of("2.5 oz cheese")).toMatchObject({ quantity: 2.5, unit: "oz" });
+    expect(of("1 kilo of rice")).toMatchObject({ quantity: 1, unit: "kilo" });
+    expect(of("300 mil of milk")).toMatchObject({ quantity: 300, unit: "mil" });
+    expect(of("300 milliliters of milk")).toMatchObject({ quantity: 300, unit: "milliliters" });
+  });
+  it("drops a stray size estimate when a real measure was given", () => {
+    const item = parsed("milk", { phrase: "milk", quantity: 300, unit: "ml", grams_per_unit_estimate: 300 });
+    expect(withStatedWeight(item).grams_per_unit_estimate).toBeNull();
+  });
+  it("doesn't multiply a total weight by itself when no digits were spoken", () => {
+    const item = parsed("milk", { phrase: "milk", quantity: 300, unit: "serving", grams_per_unit_estimate: 300 });
+    expect(withStatedWeight(item)).toMatchObject({ quantity: 300, unit: "g", grams_per_unit_estimate: null });
+  });
+  it("still allows a small count that happens to equal its size", () => {
+    const item = parsed("x", { phrase: "two things", quantity: 2, unit: "thing", grams_per_unit_estimate: 2 });
+    expect(withStatedWeight(item)).toEqual(item);
+  });
+  it("leaves other amounts to the parser", () => {
+    const item = parsed("egg", { phrase: "2 large eggs", quantity: 2, unit: "large" });
+    expect(withStatedWeight(item)).toEqual(item);
+    const glass = parsed("water", { phrase: "2 glasses", quantity: 2, unit: "glass" });
+    expect(withStatedWeight(glass)).toEqual(glass);
+  });
+  it("flags an amount too large to be likely, unless they said a weight", async () => {
+    const d = deps({ usdaCandidates: vi.fn(async () => [usda("Yogurt")]) });
+    const huge = parsed("yogurt", { phrase: "lots of yogurt", quantity: 170, unit: "serving", grams_per_unit_estimate: 171 });
+    expect((await run([huge], d)).meals[0].items[0].assumptions[0]).toMatch(/looks high/);
+    const kilo = parsed("rice", { phrase: "3 kilos of rice", quantity: 3, unit: "kg" });
+    expect((await run([kilo], d)).meals[0].items[0].assumptions).toEqual([]);
+  });
+});
+
+describe("withBroaderSearch", () => {
+  it("finds a food USDA words differently, so no AI estimate is needed", async () => {
+    const search = vi.fn(async (q: string) => (q === "butter" ? [usda("Butter, without salt")] : []));
+    const found = await withBroaderSearch("unsalted butter", search);
+    expect(found.map((f) => f.name)).toEqual(["Butter, without salt"]);
+  });
+  it("doesn't search more when the full phrase found plenty", async () => {
+    const search = vi.fn(async () => ["a", "b", "c", "d", "e"].map((n) => usda(n)));
+    await withBroaderSearch("whole milk", search);
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+  it("lists the full phrase's matches first, without repeats", async () => {
+    const search = vi.fn(async (q: string) => (q === "salmon fillet" ? [usda("Salmon fillet")] : [usda("Salmon fillet"), usda(q)]));
+    const found = await withBroaderSearch("salmon fillet", search);
+    expect(found.map((f) => f.name)).toEqual(["Salmon fillet", "salmon", "fillet"]);
   });
 });
 
