@@ -469,7 +469,10 @@ test.describe("when the phone's clock differs from the server's", () => {
 
   test("pages load without the two disagreeing", async ({ page }, info) => {
     const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    // Only React's mismatch errors. Safari also reports prefetches this test cancels.
+    page.on("pageerror", (error) => {
+      if (/react|hydrat/i.test(error.message)) errors.push(error.message);
+    });
     await signIn(page, logEmailFor(info.project.name));
     for (const path of ["/", "/log", "/meals", "/history", "/me", "/me/goals", "/foods"]) {
       await page.goto(path);
