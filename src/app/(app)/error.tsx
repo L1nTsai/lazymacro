@@ -4,7 +4,7 @@ import { Button, PageTitle } from "@/components/ui";
 
 export default function AppError({ reset }: { reset: () => void }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-4">
       <PageTitle>This page didn&apos;t load</PageTitle>
       <p className="text-muted">Check your connection and try again.</p>
       <Button onClick={reset}>Try again</Button>

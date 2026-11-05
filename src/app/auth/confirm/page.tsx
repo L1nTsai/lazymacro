@@ -15,7 +15,7 @@ export default async function ConfirmPage({
   if (!token_hash || !type) redirect("/sign-in?notice=link-expired");
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-4 py-10">
+    <main className="mx-auto flex h-dvh w-full max-w-sm flex-col justify-center px-4 py-10">
       <PageTitle>{type === "recovery" ? "Reset your password" : "Confirm your email"}</PageTitle>
       <form action={confirmEmail} className="mt-6">
         <input type="hidden" name="token_hash" value={token_hash} />

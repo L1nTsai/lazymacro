@@ -14,8 +14,8 @@ const body = z.object({
 const macro = z.number().min(0).max(5000);
 
 export const setupSchema = z.object({
-  // Null in manual mode, where a person only types their targets.
-  body: body.nullable().refine((b) => !b || (b.goal === "maintain") === (b.paceKgPerWeek === 0), {
+  name: z.string().trim().min(1).max(80),
+  body: body.refine((b) => (b.goal === "maintain") === (b.paceKgPerWeek === 0), {
     message: "Choose a pace for your goal.",
   }),
   targets: z.object({
@@ -34,3 +34,6 @@ export const setupSchema = z.object({
 export type SetupInput = z.infer<typeof setupSchema>;
 
 export const DEFAULT_STAPLES = ["salt", "pepper", "olive oil", "vegetable oil", "garlic powder", "chili flakes", "paprika", "cumin", "oregano", "soy sauce", "vinegar", "sugar"];
+
+export type StepId = "about" | "goal" | "targets" | "avoid" | "staples" | "units";
+export const SETUP_STEPS: StepId[] = ["about", "goal", "targets", "avoid", "staples"];

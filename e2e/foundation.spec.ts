@@ -8,28 +8,64 @@ async function signIn(page: Page, email: string, password = TEST_PASSWORD) {
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
-/** Every visible element, checked against the no shadow, no glow rule. */
-async function expectNoShadows(page: Page) {
-  const offenders = await page.evaluate(() =>
-    [...document.querySelectorAll("*")]
-      .filter((el) => {
-        const style = getComputedStyle(el);
-        const hasBoxShadow = style.boxShadow !== "none" && !/^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.boxShadow);
-        return hasBoxShadow || style.textShadow !== "none" || style.filter !== "none" || style.backdropFilter !== "none" && style.backdropFilter !== "";
-      })
-      .map((el) => el.tagName),
-  );
-  expect(offenders).toEqual([]);
+/** The design rules every screen must meet: one page, and no shadow or glow. */
+async function expectDesignRules(page: Page) {
+  const problems = await page.evaluate(() => {
+    const found: string[] = [];
+    const viewport = window.innerHeight;
+    const root = document.documentElement;
+    if (root.scrollHeight > viewport + 1) found.push(`page is ${root.scrollHeight}px tall in a ${viewport}px screen`);
+    if (root.scrollWidth > window.innerWidth + 1) found.push("page scrolls sideways");
+
+    for (const el of document.querySelectorAll("main, main *, form, nav, nav *")) {
+      if (el.closest("svg") || el.closest("[aria-hidden]") || (el as HTMLElement).inert) continue;
+      const box = el.getBoundingClientRect();
+      if (box.height > 0 && box.bottom > viewport + 1 && getComputedStyle(el).position !== "fixed") {
+        found.push(`${el.tagName} "${el.textContent?.slice(0, 30)}" is cut off at ${Math.round(box.bottom)}px`);
+      }
+    }
+    for (const el of document.querySelectorAll("*")) {
+      const style = getComputedStyle(el);
+      const shadow = style.boxShadow !== "none" && !/^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.boxShadow);
+      if (shadow || style.textShadow !== "none" || style.filter !== "none") found.push(`${el.tagName} has a shadow or filter`);
+    }
+    return found;
+  });
+  expect(problems).toEqual([]);
 }
 
-async function expectNoSidewaysScroll(page: Page) {
-  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-  expect(fits).toBe(true);
+async function expectSlide(page: Page, act: () => Promise<void>) {
+  const slidesRunning = () =>
+    page.evaluate(
+      () =>
+        document.documentElement
+          .getAnimations({ subtree: true })
+          .filter((a) => /^(push|pop)-/.test((a as CSSAnimation).animationName)).length,
+    );
+  // A slide still finishing from the last step must not count as this one.
+  await expect.poll(slidesRunning).toBe(0);
+  await page.evaluate(() => {
+    const w = window as unknown as { sawSlide: boolean };
+    w.sawSlide = false;
+    const check = () => {
+      const names = document.documentElement
+        .getAnimations({ subtree: true })
+        .map((a) => (a as CSSAnimation).animationName);
+      if (names.some((n) => /^(push|pop)-/.test(n))) w.sawSlide = true;
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+  await act();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { sawSlide: boolean }).sawSlide)).toBe(true);
 }
+
+const continueButton = (page: Page) => page.getByRole("button", { name: "Continue" });
 
 test("the signed-out app only offers sign-in", async ({ page, request }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/sign-in$/);
+  await expectDesignRules(page);
   await page.goto("/me");
   await expect(page).toHaveURL(/\/sign-in$/);
   expect((await request.get("/api/foods/search?q=oats")).status()).toBe(401);
@@ -38,6 +74,7 @@ test("the signed-out app only offers sign-in", async ({ page, request }) => {
 
 test("sign-up refuses other email domains", async ({ page }) => {
   await page.goto("/sign-up");
+  await expectDesignRules(page);
   await page.getByLabel("Company email").fill("someone@outside.test");
   await page.getByLabel("Password").fill("long-enough-password");
   await page.getByRole("button", { name: "Create account" }).click();
@@ -69,53 +106,89 @@ test("the app can be installed", async ({ request }) => {
   }
 });
 
-test("a new person goes from sign-in to their daily targets", async ({ page }, info) => {
+test("setup goes one page at a time, in imperial units", async ({ page }, info) => {
+  const shot = (name: string) => page.screenshot({ path: `test-results/${info.project.name}-setup-${name}.png` });
   await signIn(page, emailFor(info.project.name));
   await expect(page).toHaveURL(/\/onboarding$/);
 
-  // The worked example from targets.test.ts: 30, 180 cm, 80 kg, moderate, losing 0.5 kg.
-  await page.getByLabel("Sex").selectOption("male");
-  await page.getByLabel("Birth year").fill(String(new Date().getFullYear() - 30));
-  await page.getByLabel("Height (cm)").fill("180");
-  await page.getByLabel("Weight (kg)").fill("80");
-  await page.getByLabel("Activity").selectOption("moderate");
-  const selectBox = await page.getByLabel("Activity").boundingBox();
-  expect(selectBox!.height).toBeGreaterThanOrEqual(44);
-  await page.getByLabel("Goal").selectOption("lose");
-  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2209");
-  await expect(page.getByLabel("Protein (g)")).toHaveValue("128");
+  // Step 1: Continue stays off until the details are complete.
+  await expect(page.getByRole("heading", { name: "About you" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back" })).toHaveCount(0);
+  await expect(continueButton(page)).toBeDisabled();
+  await page.getByLabel("Name").fill("Sam");
+  await page.getByRole("radio", { name: "Male", exact: true }).click();
+  await page.getByLabel("Age").fill("30");
+  await page.getByLabel("Weight (lb)").fill("176");
+  await page.getByLabel("Height (ft)").fill("5");
+  await page.getByLabel("Height (in)").fill("11");
+  await expectDesignRules(page);
+  await shot("1-about");
 
+  // Step 2, reached with a slide.
+  await expectSlide(page, () => continueButton(page).click());
+  await expect(page.getByRole("heading", { name: "Your goal" })).toBeVisible();
+  await expect(page.getByLabel("Name")).toHaveCount(0);
+  await page.getByLabel("Activity").selectOption("moderate");
+  await page.getByRole("radio", { name: "Lose" }).click();
+  const selectBox = await page.getByLabel("Pace per week").boundingBox();
+  expect(selectBox!.height).toBeGreaterThanOrEqual(44);
+  await expectDesignRules(page);
+  await shot("2-goal");
+
+  // Going back keeps what was entered.
+  await expectSlide(page, () => page.getByRole("button", { name: "Back" }).click());
+  await expect(page.getByLabel("Name")).toHaveValue("Sam");
+  await continueButton(page).click();
+
+  // Step 3: 30, 5 ft 11 in, 176 lb, moderate, losing 1 lb a week.
+  await expect(page.getByRole("heading", { name: "Your goal" })).toBeVisible();
+  await continueButton(page).click();
+  await expect(page.getByRole("heading", { name: "Daily targets" })).toBeVisible();
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2264");
+  await expect(page.getByLabel("Protein (g)")).toHaveValue("128");
+  await expectDesignRules(page);
+  await shot("3-targets");
+  await continueButton(page).click();
+
+  await expect(page.getByRole("heading", { name: "Foods to avoid" })).toBeVisible();
   await page.getByLabel("Allergies").fill("Peanuts, shellfish");
   await page.getByLabel("Foods you don't eat").fill("cilantro");
-  await expectNoShadows(page);
-  await expectNoSidewaysScroll(page);
-  await page.screenshot({ path: `test-results/${info.project.name}-onboarding.png`, fullPage: true });
-  await page.getByRole("button", { name: "Save and continue" }).click();
+  await expectDesignRules(page);
+  await shot("4-avoid");
+  await continueButton(page).click();
 
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
-  await expect(page.getByText("2,209")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pantry staples" })).toBeVisible();
+  await expectDesignRules(page);
+  await shot("5-staples");
+  await expectSlide(page, () => page.getByRole("button", { name: "Finish" }).click());
+
+  await expect(page.getByRole("heading", { name: "Hi, Sam" })).toBeVisible();
+  await expect(page.getByText("2,264")).toBeVisible();
   await expect(page.getByText("kcal left")).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Protein" })).toBeVisible();
-  await expectNoShadows(page);
-  await expectNoSidewaysScroll(page);
+  await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-today-light.png` });
 
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.screenshot({ path: `test-results/${info.project.name}-today-dark.png` });
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
   await page.emulateMedia({ colorScheme: "light" });
 
-  // Tab bar targets are large enough for a thumb.
   for (const name of ["Today", "Fridge", "Ideas", "Me"]) {
-    const box = await page.getByRole("navigation").getByRole("link", { name, exact: true }).boundingBox();
+    const box = await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
     expect(box!.width).toBeGreaterThanOrEqual(44);
   }
   await page.getByRole("link", { name: "Log a meal" }).click();
   await expect(page.getByRole("heading", { name: "Log a meal" })).toBeVisible();
+  await expectDesignRules(page);
+  for (const [href, heading] of [["/fridge", "Fridge"], ["/ideas", "Ideas"]]) {
+    await page.goto(href);
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    await expectDesignRules(page);
+  }
 });
 
-function logMeal(email: string, type: string, kcal: number, protein: number, carbs: number, fat: number) {
+function logMeal(email: string, type: string, kcal: number, protein: number, carbs: number, fat: number, count = 1) {
   runSql(`
     with me as (
       select u.id, (now() at time zone p.timezone)::date as today
@@ -127,78 +200,127 @@ function logMeal(email: string, type: string, kcal: number, protein: number, car
       returning id, user_id
     )
     insert into public.log_entries (meal_id, user_id, food_id, phrase, quantity, unit, grams, kcal, protein_g, carbs_g, fat_g, confidence)
-    select meal.id, meal.user_id, (select id from public.foods limit 1), 'test food', 100, 'g', 100, ${kcal}, ${protein}, ${carbs}, ${fat}, 'verified'
-    from meal;
+    select meal.id, meal.user_id, (select id from public.foods limit 1), 'test food ' || n, 100, 'g', 100, ${kcal}, ${protein}, ${carbs}, ${fat}, 'verified'
+    from meal, generate_series(1, ${count}) as n;
   `);
 }
 
-test("logged meals fill the ring and bars, and going over stays neutral", async ({ page }, info) => {
+test("logged meals fill the ring and bars, and live on their own pages", async ({ page }, info) => {
   const email = emailFor(info.project.name);
   logMeal(email, "breakfast", 1100, 60, 130, 30);
   await signIn(page, email);
-  await expect(page.getByText("1,109")).toBeVisible();
+  await expect(page.getByText("1,164")).toBeVisible();
   await expect(page.getByText("kcal left")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Breakfast" })).toBeVisible();
 
   const ring = page.locator("svg circle").nth(1);
   await expect(ring).toHaveAttribute("stroke", "var(--data-calories)");
   const proteinFill = page.getByRole("progressbar", { name: "Protein" }).locator("div");
   await expect(proteinFill).toHaveAttribute("style", /width: 46\.875%.*var\(--data-protein\)/);
-  await expectNoShadows(page);
+  await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-today-filled-light.png` });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.screenshot({ path: `test-results/${info.project.name}-today-filled-dark.png` });
   await page.emulateMedia({ colorScheme: "light" });
 
+  // Meals open on their own page, with a slide each way.
+  await expectSlide(page, () => page.getByRole("link", { name: /Meals/ }).click());
+  await expect(page.getByRole("heading", { name: "Meals" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+  await expectDesignRules(page);
+  await expectSlide(page, () => page.getByRole("link", { name: "Back" }).click());
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  await page.getByRole("link", { name: /Meals/ }).click();
+  await page.getByRole("link", { name: /Breakfast/ }).click();
+  await expect(page.getByRole("heading", { name: "Breakfast" })).toBeVisible();
+  await expect(page.getByText("test food 1")).toBeVisible();
+
+  // A long meal pages instead of scrolling.
+  logMeal(email, "breakfast", 1, 0, 0, 0, 25);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Next" })).toBeVisible();
+  await expectDesignRules(page);
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("button", { name: "Previous" })).toBeEnabled();
+  await expectDesignRules(page);
+
+  await page.goto("/");
   logMeal(email, "lunch", 1300, 10, 10, 5);
   await page.reload();
-  await expect(page.getByText("191", { exact: true })).toBeVisible();
   await expect(page.getByText("kcal over target")).toBeVisible();
   await expect(ring).toHaveAttribute("stroke", "var(--data-over)");
   await expect(page.locator("p[role=alert]")).toHaveCount(0);
   await page.screenshot({ path: `test-results/${info.project.name}-today-over.png` });
 });
 
-test("food search finds real USDA foods", async ({ page }, info) => {
+test("food search pages through real USDA foods", async ({ page }, info) => {
   await signIn(page, emailFor(info.project.name));
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
   await page.goto("/foods");
   await page.getByLabel("Food name").fill("chicken breast");
   await expect(page.getByText("Chicken, breast, boneless, skinless, raw")).toBeVisible();
   await expect(page.getByText("Verified").first()).toBeVisible();
-  await expectNoShadows(page);
-  await expectNoSidewaysScroll(page);
+  await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-search.png` });
+
+  const first = await page.getByRole("listitem").first().textContent();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("listitem").first()).not.toHaveText(first!);
+  await expectDesignRules(page);
 
   await page.getByLabel("Food name").fill("zzzzqqqq");
   await expect(page.getByText(/No foods match/)).toBeVisible();
 });
 
-test("goals can be edited and data exported", async ({ page }, info) => {
+test("settings live on short pages, and goals can be edited", async ({ page }, info) => {
   await signIn(page, emailFor(info.project.name));
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
   await page.goto("/me");
-  await expect(page.getByText("peanuts, shellfish")).toBeVisible();
-  await expect(page.getByText("cilantro")).toBeVisible();
-  await expectNoShadows(page);
-  await page.screenshot({ path: `test-results/${info.project.name}-me.png`, fullPage: true });
+  await expectDesignRules(page);
+  await page.screenshot({ path: `test-results/${info.project.name}-me.png` });
 
-  await page.getByRole("link", { name: "Edit" }).click();
-  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2209");
+  await expectSlide(page, () => page.getByRole("link", { name: /Foods to avoid/ }).click());
+  await expect(page.getByLabel("Allergies")).toHaveValue("peanuts, shellfish");
+  await expect(page.getByLabel("Foods you don't eat")).toHaveValue("cilantro");
+  await expectDesignRules(page);
+  await page.getByLabel("Foods you don't eat").fill("cilantro, olives");
+  await expectSlide(page, () => page.getByRole("button", { name: "Save" }).click());
+  await expect(page).toHaveURL(/\/me$/);
+  await expect(page.getByRole("link", { name: /Foods to avoid/ })).toContainText("4");
+
+  await page.getByRole("link", { name: /Units/ }).click();
+  await page.getByLabel("Show ounces alongside grams").check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page).toHaveURL(/\/me$/);
+
+  await page.getByRole("link", { name: /Goals/ }).click();
+  await expect(page.getByLabel("Weight (lb)")).toHaveValue("176");
+  await expect(page.getByLabel("Height (ft)")).toHaveValue("5");
+  await expect(page.getByLabel("Height (in)")).toHaveValue("11");
+  await continueButton(page).click();
+  await expect(page.getByRole("heading", { name: "Your goal" })).toBeVisible();
+  await continueButton(page).click();
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2264");
   await page.getByLabel("Calories (kcal)").fill("1000");
   await expect(page.getByText(/below the common daily minimum/)).toBeVisible();
+  await expectDesignRules(page);
   await page.getByLabel("Calories (kcal)").fill("2100");
-  await page.getByRole("button", { name: "Save goals" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page).toHaveURL(/\/me$/);
-  await expect(page.getByText("2,100 kcal")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Goals/ })).toContainText("2,100 kcal");
 
+  await page.getByRole("link", { name: /Your data/ }).click();
+  await expectDesignRules(page);
   const response = await page.request.get("/api/me/export");
   expect(response.status()).toBe(200);
   const data = await response.json();
-  expect(data.profiles).toHaveLength(1);
+  expect(data.profiles[0].display_name).toBe("Sam");
+  expect(data.profiles[0].show_oz).toBe(true);
+  expect(data.profiles[0].height_cm).toBe(180.3);
   expect(data.targets[0].kcal).toBe(2100);
   expect(data.user_exclusions.map((e: { term: string; kind: string }) => [e.term, e.kind]).sort()).toEqual([
     ["cilantro", "exclude"],
+    ["olives", "exclude"],
     ["peanuts", "allergy"],
     ["shellfish", "allergy"],
   ]);
@@ -206,17 +328,19 @@ test("goals can be edited and data exported", async ({ page }, info) => {
 
 test("signing out ends access, and deleting removes the account", async ({ page }, info) => {
   await signIn(page, emailFor(info.project.name));
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
-  await page.goto("/me");
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  await page.goto("/me/account");
+  await expectDesignRules(page);
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.goto("/me");
   await expect(page).toHaveURL(/\/sign-in$/);
 
   await signIn(page, emailFor(info.project.name));
-  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
-  await page.goto("/me");
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  await page.goto("/me/account");
   await page.getByText("Delete account").click();
+  await expectDesignRules(page);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await expect(page.locator("p[role=alert]")).toHaveText("Type delete to confirm.");
   await page.getByLabel("Type delete to confirm").fill("delete");

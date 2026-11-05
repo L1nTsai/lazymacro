@@ -36,11 +36,18 @@ function Tab({ href, label, children }: { href: string; label: string; children:
   );
 }
 
+/** Pushed pages and setup take the whole screen, as they do on iOS. */
+const hidesTabBar = (pathname: string) =>
+  pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/onboarding");
+
 export function TabBar() {
+  const pathname = usePathname();
+  if (hidesTabBar(pathname)) return null;
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
+      style={{ viewTransitionName: "tab-bar" }}
+      className="shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
     >
       <div className="mx-auto flex max-w-lg items-center px-2">
         <Tab href="/" label="Today">{TODAY}</Tab>

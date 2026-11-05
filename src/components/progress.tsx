@@ -10,7 +10,7 @@ export function CaloriesRing({ eaten, target }: { eaten: number; target: number 
   const filled = Math.min(eaten / target, 1) * circumference;
 
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-60">
+    <div className="relative mx-auto aspect-square h-full max-h-60 max-w-full">
       <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90" aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--track)" strokeWidth={stroke} />
         <circle
@@ -24,7 +24,7 @@ export function CaloriesRing({ eaten, target }: { eaten: number; target: number 
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-6xl font-semibold tracking-tighter tabular-nums">{formatNumber(Math.abs(remaining))}</span>
+        <span className="font-semibold tracking-tighter tabular-nums [font-size:min(3.75rem,8.5dvh)] leading-none">{formatNumber(Math.abs(remaining))}</span>
         <span className="mt-1 text-sm text-muted">{over ? "kcal over target" : "kcal left"}</span>
       </div>
     </div>

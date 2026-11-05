@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
 const BASE_BUTTON =
@@ -81,5 +82,91 @@ export function TrustBadge({ confidence }: { confidence: keyof typeof TRUST_STYL
     <span className="inline-block rounded px-1.5 py-0.5 text-xs font-medium" style={{ background, color }}>
       {label}
     </span>
+  );
+}
+
+export const Chevron = ({ direction }: { direction: "left" | "right" }) => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d={direction === "left" ? "m12.500 4-6 6 6 6" : "m7.500 4 6 6-6 6"} />
+  </svg>
+);
+
+export function NavRow({ href, label, detail }: { href: string; label: string; detail?: string }) {
+  return (
+    <Link href={href} transitionTypes={["nav-forward"]} className="flex min-h-14 items-center justify-between gap-4 px-4">
+      <span className="text-sm font-medium">{label}</span>
+      <span className="flex min-w-0 items-center gap-2 text-sm text-muted">
+        {detail ? <span className="truncate">{detail}</span> : null}
+        <Chevron direction="right" />
+      </span>
+    </Link>
+  );
+}
+
+export function NavList({ children }: { children: ReactNode }) {
+  return <nav className="divide-y divide-border rounded-md border border-border">{children}</nav>;
+}
+
+/** A pushed page: a back arrow, a title, and content that fills what's left. */
+export function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
+  return (
+    <div className="flex h-full flex-col bg-background px-4 pt-[max(env(safe-area-inset-top),0.5rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+      <Link
+        href={back}
+        transitionTypes={["nav-back"]}
+        aria-label="Back"
+        className="-ml-3 flex size-11 shrink-0 items-center justify-center"
+      >
+        <Chevron direction="left" />
+      </Link>
+      <div className="mt-1 mb-4 shrink-0">
+        <PageTitle>{title}</PageTitle>
+      </div>
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+const SEGMENT = "min-h-11 flex-1 text-sm font-medium";
+
+export function SegmentedControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex gap-px overflow-hidden rounded-md border border-border bg-border">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={value === option.value}
+            onClick={() => onChange(option.value)}
+            className={`${SEGMENT} ${value === option.value ? "bg-foreground text-background" : "bg-background text-muted"}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

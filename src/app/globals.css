@@ -59,6 +59,14 @@
   --font-sans: var(--font-geist-sans);
 }
 
+/* Screens never scroll. Anything that doesn't fit belongs on another page. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -75,9 +83,63 @@ body {
   outline-offset: 2px;
 }
 
+/* Screens clip their overflow, so a field's outline stays inside its edges. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: -2px;
+}
+
 input,
 select,
 textarea {
   /* 16px stops iOS Safari zooming in when a field is focused. */
   font-size: 16px;
+}
+
+/* iOS-style push between pages. Borders, not shadows, separate the layers. */
+@keyframes push-from-right {
+  from { transform: translateX(100%); }
+}
+@keyframes push-to-left {
+  to { transform: translateX(-30%); }
+}
+@keyframes pop-from-left {
+  from { transform: translateX(-30%); }
+}
+@keyframes pop-to-right {
+  to { transform: translateX(100%); }
+}
+
+::view-transition-old(.nav-forward),
+::view-transition-new(.nav-forward),
+::view-transition-old(.nav-back),
+::view-transition-new(.nav-back) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+::view-transition-old(.nav-forward) { animation-name: push-to-left; }
+::view-transition-new(.nav-forward) { animation-name: push-from-right; z-index: 1; }
+::view-transition-old(.nav-back) { animation-name: pop-to-right; z-index: 1; }
+::view-transition-new(.nav-back) { animation-name: pop-from-left; }
+
+/* Anything without a direction, such as switching tabs, changes instantly. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(tab-bar) {
+  animation: none;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }

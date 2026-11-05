@@ -1,11 +1,10 @@
-import type { SetupDefaults } from "@/components/setup-form";
+import type { SetupDefaults } from "@/components/setup-flow";
 import type { createClient } from "./supabase/server";
 import { DEFAULT_STAPLES } from "./setup";
-import { localDate } from "./date";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-export async function loadSetupDefaults(supabase: Client, userId: string): Promise<{ defaults: SetupDefaults; hasProfile: boolean }> {
+export async function loadSetupDefaults(supabase: Client, userId: string): Promise<{ defaults: SetupDefaults; complete: boolean }> {
   const [profile, exclusions, staples] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
     supabase.from("user_exclusions").select("term, kind").eq("user_id", userId).order("term"),
@@ -18,25 +17,26 @@ export async function loadSetupDefaults(supabase: Client, userId: string): Promi
   const p = profile.data;
   if (!p) {
     return {
-      hasProfile: false,
-      defaults: { body: null, targets: null, allergies: [], excluded: [], staples: DEFAULT_STAPLES.slice(0, 4), showOz: false },
+      complete: false,
+      defaults: { name: "", body: null, targets: null, allergies: [], excluded: [], staples: DEFAULT_STAPLES.slice(0, 4), showOz: false },
     };
   }
 
-  const today = localDate(p.timezone);
+  // The latest target, even one dated tomorrow after someone changes time zone.
   const target = await supabase
     .from("targets")
     .select("kcal, protein_g, carbs_g, fat_g")
     .eq("user_id", userId)
-    .lte("effective_from", today)
     .order("effective_from", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (target.error) throw target.error;
 
   return {
-    hasProfile: true,
+    // Older profiles can lack these details, which sends them back through setup.
+    complete: Boolean(p.display_name && p.sex),
     defaults: {
+      name: p.display_name ?? "",
       body: p.sex
         ? {
             sex: p.sex,

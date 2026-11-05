@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Pager } from "@/components/pager";
 import { Input, TrustBadge } from "@/components/ui";
 
 type Food = {
@@ -13,6 +14,8 @@ type Food = {
   carbs_per_100g: number;
   fat_per_100g: number;
 };
+
+const oneDecimal = (n: number) => Math.round(n * 10) / 10;
 
 type Status = "idle" | "loading" | "done" | "error";
 
@@ -67,20 +70,26 @@ export function FoodSearch() {
       {showResults && foods.length > 0 ? (
         <>
           <p className="text-sm text-muted">Values per 100 g</p>
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {foods.map((food) => (
-              <li key={food.id} className="space-y-1.5 p-3">
-                <p className="text-sm font-medium">{food.name}{food.brand ? `, ${food.brand}` : ""}</p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted tabular-nums">
-                  <TrustBadge confidence={food.confidence} />
-                  <span>{Math.round(food.kcal_per_100g)} kcal</span>
-                  <span>{food.protein_per_100g} g protein</span>
-                  <span>{food.carbs_per_100g} g carbs</span>
-                  <span>{food.fat_per_100g} g fat</span>
+          <div className="min-h-0 flex-1">
+            <Pager
+              key={foods.map((food) => food.id).join()}
+              label="Search results"
+              items={foods}
+              rowHeight={80}
+              renderRow={(food) => (
+                <div className="flex h-full flex-col justify-center gap-1">
+                  <p className="line-clamp-2 text-sm leading-tight font-medium">{food.name}{food.brand ? `, ${food.brand}` : ""}</p>
+                  <div className="flex items-center gap-2 text-sm whitespace-nowrap text-muted tabular-nums">
+                    <TrustBadge confidence={food.confidence} />
+                    <span>{Math.round(food.kcal_per_100g)} kcal</span>
+                    <span>P {oneDecimal(food.protein_per_100g)}</span>
+                    <span>C {oneDecimal(food.carbs_per_100g)}</span>
+                    <span>F {oneDecimal(food.fat_per_100g)}</span>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
+              )}
+            />
+          </div>
         </>
       ) : null}
     </>

@@ -11,5 +11,7 @@ export default defineConfig({
   projects: [
     { name: "iphone-safari", use: { ...devices["iPhone 14"] } },
     { name: "android-chrome", use: { ...devices["Pixel 7"] } },
+    // The smallest screen the no-scrolling rule has to hold on.
+    { name: "small-iphone", use: { ...devices["iPhone SE"] } },
   ],
 });

@@ -5,7 +5,7 @@ import { localDate } from "@/lib/date";
 import { setupSchema } from "@/lib/setup";
 import { createClient, getUserId } from "@/lib/supabase/server";
 
-export type SetupState = { error?: string };
+export type SetupState = { error?: string; saved?: boolean };
 
 export async function saveSetup(_: SetupState, form: FormData): Promise<SetupState> {
   const userId = await getUserId();
@@ -18,19 +18,20 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
     return { error: "We couldn't read that form. Reload and try again." };
   }
   const parsed = setupSchema.safeParse(payload);
-  if (!parsed.success) return { error: "Check the highlighted details and try again." };
+  if (!parsed.success) return { error: "Check your details and try again." };
 
-  const { body, targets, allergies, excluded, staples, showOz, timezone } = parsed.data;
+  const { name, body, targets, allergies, excluded, staples, showOz, timezone } = parsed.data;
   const supabase = await createClient();
   const { error } = await supabase.rpc("save_my_setup", {
     p_profile: {
-      sex: body?.sex ?? null,
-      birth_year: body?.birthYear ?? null,
-      height_cm: body?.heightCm ?? null,
-      weight_kg: body?.weightKg ?? null,
-      activity: body?.activity ?? null,
-      goal: body?.goal ?? null,
-      pace_kg_per_week: body?.paceKgPerWeek ?? 0,
+      display_name: name,
+      sex: body.sex,
+      birth_year: body.birthYear,
+      height_cm: body.heightCm,
+      weight_kg: body.weightKg,
+      activity: body.activity,
+      goal: body.goal,
+      pace_kg_per_week: body.paceKgPerWeek,
       timezone,
       show_oz: showOz,
     },
@@ -52,5 +53,7 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
     console.error("save_setup_failed", { code: error.code });
     return { error: "Your goals weren't saved. Try again." };
   }
-  redirect(String(form.get("next")) === "/me" ? "/me" : "/");
+  // The form navigates, so the move can slide. Revalidating here would re-render
+  // setup, whose redirect for finished profiles would beat that navigation.
+  return { saved: true };
 }

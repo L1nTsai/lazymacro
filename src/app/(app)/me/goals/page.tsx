@@ -1,17 +1,18 @@
-import { SetupForm } from "@/components/setup-form";
-import { PageTitle } from "@/components/ui";
+import { PageSlide } from "@/components/page-slide";
+import { SetupFlow } from "@/components/setup-flow";
+import { requireProfile } from "@/lib/profile";
+import type { StepId } from "@/lib/setup";
 import { loadSetupDefaults } from "@/lib/setup-defaults";
-import { createClient, getUserId } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
-export default async function GoalsPage() {
-  const userId = (await getUserId())!;
-  const supabase = await createClient();
-  const { defaults } = await loadSetupDefaults(supabase, userId);
+const STEPS: StepId[] = ["about", "goal", "targets"];
 
+export default async function Page() {
+  const { userId } = await requireProfile();
+  const { defaults } = await loadSetupDefaults(await createClient(), userId);
   return (
-    <div className="space-y-6">
-      <PageTitle>Edit goals</PageTitle>
-      <SetupForm defaults={defaults} next="/me" submitLabel="Save goals" />
-    </div>
+    <PageSlide>
+      <SetupFlow defaults={defaults} steps={STEPS} next="/me" direction="nav-back" back="/me" />
+    </PageSlide>
   );
 }

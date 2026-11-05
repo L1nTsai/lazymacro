@@ -59,6 +59,9 @@ Download both from https://fdc.nal.usda.gov/download-datasets/. Use the JSON rel
 - Vercel's black, white and gray, using the Geist font, in light and dark mode.
 - No shadows or glow. Borders separate surfaces.
 - Color is only for things that fill in: graphs, bars and status.
+- Screens never scroll. Content that doesn't fit moves to another page.
+- It should feel like an iOS app: short steps, with a slide when moving between pages.
+- Body measurements are entered in imperial units and stored as metric. Food stays in grams.
 - Going over a target stays neutral gray. Red is only for real errors.
 
 ## Nutrition rules

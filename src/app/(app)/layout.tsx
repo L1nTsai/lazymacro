@@ -1,20 +1,14 @@
-import { redirect } from "next/navigation";
 import { TabBar } from "@/components/tab-bar";
-import { createClient, getUserId } from "@/lib/supabase/server";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const userId = await getUserId();
-  if (!userId) redirect("/sign-in");
-
-  const supabase = await createClient();
-  const { data: profile, error } = await supabase.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
-  if (error) throw error;
-  if (!profile) redirect("/onboarding");
-
+/**
+ * One layout for every signed-in page, because slides can't cross layouts.
+ * Each page calls requireProfile; a layout check wouldn't stop a page rendering.
+ */
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <main className="mx-auto w-full max-w-lg px-4 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))]">{children}</main>
+    <div className="flex h-dvh flex-col">
+      <main className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-hidden">{children}</main>
       <TabBar />
-    </>
+    </div>
   );
 }

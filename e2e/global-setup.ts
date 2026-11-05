@@ -1,9 +1,9 @@
-import { TEST_DOMAIN, TEST_PASSWORD, emailFor, removeTestData, runSql } from "./helpers";
+import { PROJECTS, TEST_DOMAIN, TEST_PASSWORD, emailFor, removeTestData, runSql } from "./helpers";
 
 /** Creates confirmed accounts directly, so the tests never send real email. */
 export default function globalSetup() {
   removeTestData();
-  const users = ["iphone-safari", "android-chrome"]
+  const users = PROJECTS
     .map(
       (project) => `
       insert into auth.users (

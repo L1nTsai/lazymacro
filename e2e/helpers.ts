@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+export const PROJECTS = ["iphone-safari", "android-chrome", "small-iphone"];
 export const TEST_DOMAIN = "e2e.lazymacro.test";
 export const TEST_PASSWORD = "e2e-temporary-password";
 export const emailFor = (project: string) => `${project}@${TEST_DOMAIN}`;
