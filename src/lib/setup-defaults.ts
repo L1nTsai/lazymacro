@@ -1,6 +1,7 @@
 import type { SetupDefaults } from "@/components/setup-flow";
 import type { createClient } from "./supabase/server";
 import { DEFAULT_STAPLES } from "./setup";
+import { DEFAULT_FORMULA } from "./targets";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
@@ -18,7 +19,7 @@ export async function loadSetupDefaults(supabase: Client, userId: string): Promi
   if (!p) {
     return {
       complete: false,
-      defaults: { name: "", body: null, targets: null, allergies: [], excluded: [], staples: DEFAULT_STAPLES.slice(0, 4), showOz: false },
+      defaults: { name: "", body: null, targets: null, formula: DEFAULT_FORMULA, allergies: [], excluded: [], staples: DEFAULT_STAPLES.slice(0, 4), showOz: false },
     };
   }
 
@@ -56,6 +57,7 @@ export async function loadSetupDefaults(supabase: Client, userId: string): Promi
             fatG: Number(target.data.fat_g),
           }
         : null,
+      formula: { proteinGPerLb: Number(p.protein_g_per_lb), fatUnit: p.fat_unit, fatValue: Number(p.fat_value) },
       allergies: (exclusions.data ?? []).filter((e) => e.kind === "allergy").map((e) => e.term),
       excluded: (exclusions.data ?? []).filter((e) => e.kind === "exclude").map((e) => e.term),
       staples: (staples.data ?? []).map((s) => s.name),

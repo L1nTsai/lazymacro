@@ -20,7 +20,7 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
   const parsed = setupSchema.safeParse(payload);
   if (!parsed.success) return { error: "Check your details and try again." };
 
-  const { name, body, targets, allergies, excluded, staples, showOz, timezone } = parsed.data;
+  const { name, body, targets, formula, allergies, excluded, staples, showOz, timezone } = parsed.data;
   const supabase = await createClient();
   const { error } = await supabase.rpc("save_my_setup", {
     p_profile: {
@@ -34,6 +34,9 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
       pace_kg_per_week: body.paceKgPerWeek,
       timezone,
       show_oz: showOz,
+      protein_g_per_lb: formula.proteinGPerLb,
+      fat_unit: formula.fatUnit,
+      fat_value: formula.fatValue,
     },
     p_targets: {
       kcal: targets.kcal,

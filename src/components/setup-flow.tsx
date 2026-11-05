@@ -5,7 +5,18 @@ import { useRouter } from "next/navigation";
 import { addTransitionType, startTransition, useActionState, useEffect, useRef, useState, ViewTransition, type FormEvent } from "react";
 import { saveSetup } from "@/app/(app)/onboarding/actions";
 import { DEFAULT_STAPLES, type StepId } from "@/lib/setup";
-import { calculateTargets, isBelowCommonMinimum, type Activity, type Goal, type Sex } from "@/lib/targets";
+import {
+  calorieTarget,
+  formulaIsValid,
+  isBelowCommonMinimum,
+  macrosFor,
+  MAX_FAT_PERCENT,
+  type Activity,
+  type FatUnit,
+  type Goal,
+  type MacroFormula,
+  type Sex,
+} from "@/lib/targets";
 import { cmToFeetInches, feetInchesToCm, kgToLb, lbToKg, paceKgToLb, paceLbToKg } from "@/lib/units";
 import { Button, Chevron, Field, FormError, Input, SegmentedControl, Select } from "./ui";
 
@@ -21,6 +32,7 @@ export type SetupDefaults = {
     paceKgPerWeek: number;
   } | null;
   targets: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
+  formula: MacroFormula;
   allergies: string[];
   excluded: string[];
   staples: string[];
@@ -87,21 +99,25 @@ export function SetupFlow({
   const [excluded, setExcluded] = useState(defaults.excluded.join(", "));
   const [staples, setStaples] = useState(new Set(defaults.staples));
   const [showOz, setShowOz] = useState(defaults.showOz);
-  // Numbers the person typed. Changing their details recalculates instead.
-  const [typed, setTyped] = useState<Record<string, string> | null>(
-    defaults.targets
-      ? {
-          kcal: String(defaults.targets.kcal),
-          proteinG: String(defaults.targets.proteinG),
-          carbsG: String(defaults.targets.carbsG),
-          fatG: String(defaults.targets.fatG),
-        }
-      : null,
-  );
+  const [proteinRatio, setProteinRatio] = useState(String(defaults.formula.proteinGPerLb));
+  const [fatUnit, setFatUnit] = useState<FatUnit>(defaults.formula.fatUnit);
+  const [fatValue, setFatValue] = useState(String(defaults.formula.fatValue));
+  // Stay on the saved numbers until something that affects them changes, so
+  // saving another step never rewrites someone's targets.
+  const [saved, setSaved] = useState(defaults.targets);
+  // Calories the person chose, otherwise they're calculated from their details.
+  const [chosenKcal, setChosenKcal] = useState(defaults.targets ? String(defaults.targets.kcal) : null);
+  // What's in the field while typing, so a low number isn't raised mid-keystroke.
+  const [kcalDraft, setKcalDraft] = useState<string | null>(null);
 
+  const recalculate = () => {
+    setSaved(null);
+    setChosenKcal(null);
+    setKcalDraft(null);
+  };
   const recalculating = <T,>(set: (value: T) => void) => (value: T) => {
     set(value);
-    setTyped(null);
+    recalculate();
   };
   const setSex = recalculating(setSexValue);
   const setAge = recalculating(setAgeValue);
@@ -136,26 +152,43 @@ export function SetupFlow({
         paceKgPerWeek,
       }
     : null;
-  const calculated = details ? calculateTargets({ ...details, age: ageNumber }) : null;
+  const formula: MacroFormula = { proteinGPerLb: toNumber(proteinRatio), fatUnit, fatValue: toNumber(fatValue) };
+  const kcalText = kcalDraft ?? chosenKcal;
+  const baseKcal = kcalText !== null ? toNumber(kcalText) : details ? calorieTarget({ ...details, age: ageNumber }) : NaN;
+  const calculated = details && Number.isInteger(baseKcal) && formulaIsValid(formula) ? macrosFor(baseKcal, poundsNumber, formula) : null;
+  const targets = saved ?? calculated;
+  const kcalShown = kcalDraft ?? String(targets?.kcal ?? (Number.isFinite(baseKcal) ? baseKcal : ""));
 
-  type TargetKey = "kcal" | "proteinG" | "carbsG" | "fatG";
-  const shown = (key: TargetKey) => typed?.[key] ?? (calculated ? String(calculated[key]) : "");
-  const edit = (key: TargetKey, value: string) =>
-    setTyped({ kcal: shown("kcal"), proteinG: shown("proteinG"), carbsG: shown("carbsG"), fatG: shown("fatG"), [key]: value });
-
-  const targets = {
-    kcal: toNumber(shown("kcal")),
-    proteinG: toNumber(shown("proteinG")),
-    carbsG: toNumber(shown("carbsG")),
-    fatG: toNumber(shown("fatG")),
-  };
   const targetsValid =
-    Object.values(targets).every((n) => Number.isFinite(n) && n >= 0) && Number.isInteger(targets.kcal) && targets.kcal > 0;
+    targets !== null &&
+    Number.isInteger(targets.kcal) &&
+    inRange(targets.kcal, 1, 20000) &&
+    [targets.proteinG, targets.carbsG, targets.fatG].every((grams) => inRange(grams, 0, 5000));
+  const belowMinimum = targetsValid && isBelowCommonMinimum(targets.kcal, sex);
+  const raised = saved === null && kcalDraft === null && Boolean(calculated?.raised);
+  const savedDiffers =
+    saved !== null &&
+    calculated !== null &&
+    (saved.proteinG !== calculated.proteinG || saved.carbsG !== calculated.carbsG || saved.fatG !== calculated.fatG);
+
+  const changeFatUnit = (unit: FatUnit) => {
+    if (unit === fatUnit) return;
+    setFatUnit(unit);
+    setFatValue(
+      !targetsValid
+        ? ""
+        : unit === "grams"
+          ? String(targets.fatG)
+          : String(Math.min(MAX_FAT_PERCENT, Math.round((targets.fatG * 9 * 1000) / targets.kcal) / 10)),
+    );
+    setSaved(null);
+  };
 
   const payload = JSON.stringify({
     name: name.trim(),
     body: details ? { ...details, birthYear: currentYear - ageNumber } : null,
-    targets,
+    targets: targets && { kcal: targets.kcal, proteinG: targets.proteinG, carbsG: targets.carbsG, fatG: targets.fatG },
+    formula,
     allergies: list(allergies),
     excluded: list(excluded),
     staples: [...staples],
@@ -297,30 +330,86 @@ export function SetupFlow({
             ) : null}
 
             {step === "targets" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted">Calculated from your details. Change any number you like.</p>
+              <div className="space-y-3">
                 <Field label="Calories (kcal)">
-                  <Input inputMode="numeric" value={shown("kcal")} onChange={(e) => edit("kcal", e.target.value)} />
+                  <Input
+                    inputMode="numeric"
+                    value={kcalShown}
+                    onChange={(e) => {
+                      setKcalDraft(e.target.value);
+                      setSaved(null);
+                    }}
+                    onBlur={() => {
+                      if (kcalDraft === null) return;
+                      setChosenKcal(kcalDraft);
+                      setKcalDraft(null);
+                    }}
+                  />
                 </Field>
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="Protein (g)">
-                    <Input inputMode="decimal" value={shown("proteinG")} onChange={(e) => edit("proteinG", e.target.value)} />
-                  </Field>
-                  <Field label="Carbs (g)">
-                    <Input inputMode="decimal" value={shown("carbsG")} onChange={(e) => edit("carbsG", e.target.value)} />
-                  </Field>
-                  <Field label="Fat (g)">
-                    <Input inputMode="decimal" value={shown("fatG")} onChange={(e) => edit("fatG", e.target.value)} />
-                  </Field>
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-3 items-start gap-3">
+                    <Field label="Protein (g/lb)">
+                      <Input
+                        inputMode="decimal"
+                        value={proteinRatio}
+                        onChange={(e) => {
+                          setProteinRatio(e.target.value);
+                          setSaved(null);
+                        }}
+                      />
+                    </Field>
+                    <Field label={fatUnit === "percent" ? "Fat (%)" : "Fat (g)"}>
+                      <Input
+                        inputMode="decimal"
+                        value={fatValue}
+                        onChange={(e) => {
+                          setFatValue(e.target.value);
+                          setSaved(null);
+                        }}
+                      />
+                    </Field>
+                    <SegmentedControl
+                      label="Fat in"
+                      value={fatUnit}
+                      onChange={changeFatUnit}
+                      options={[
+                        { value: "percent", label: "%" },
+                        { value: "grams", label: "g" },
+                      ]}
+                    />
+                  </div>
+                  {belowMinimum ? null : (
+                    <p className="text-sm text-muted">
+                      {fatUnit === "percent" ? "Most choose 20–30%." : targetsValid ? `About ${Math.round((targets.fatG * 900) / targets.kcal)}% of calories.` : ""} Carbs fill the rest.
+                    </p>
+                  )}
                 </div>
-                {typed && calculated ? (
-                  <button type="button" onClick={() => setTyped(null)} className="min-h-11 text-sm underline underline-offset-4">
+                <dl className="grid grid-cols-3 gap-3 rounded-md border border-border p-2 text-sm">
+                  {[
+                    { label: "Protein", grams: targets?.proteinG },
+                    { label: "Carbs", grams: targets?.carbsG },
+                    { label: "Fat", grams: targets?.fatG },
+                  ].map(({ label, grams }) => (
+                    <div key={label}>
+                      <dt className="text-muted">{label}</dt>
+                      <dd className="font-medium tabular-nums">{grams === undefined ? "–" : `${grams} g`}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {raised && !belowMinimum ? (
+                  <p role="status" className="text-sm text-muted">
+                    Calories raised to fit your protein and fat.{goal === "lose" ? " You'll lose weight slower than your chosen pace." : ""}
+                  </p>
+                ) : null}
+                {savedDiffers && !belowMinimum ? <p className="text-sm text-muted">These are your saved targets. Recalculate to use this formula.</p> : null}
+                {chosenKcal !== null || saved !== null ? (
+                  <button type="button" onClick={recalculate} className="min-h-11 text-sm underline underline-offset-4">
                     Recalculate from my details
                   </button>
                 ) : null}
-                {targetsValid && isBelowCommonMinimum(targets.kcal, sex) ? (
-                  <p role="status" className="rounded-md border border-border p-3 text-sm">
-                    This is below the common daily minimum. Consider talking to a doctor or dietitian before following it.
+                {belowMinimum ? (
+                  <p role="status" className="rounded-md border border-border p-2 text-sm">
+                    {raised ? "Calories raised to fit your protein and fat. This is still" : "This is"} below the common daily minimum. Consider talking to a doctor or dietitian first.
                   </p>
                 ) : null}
               </div>

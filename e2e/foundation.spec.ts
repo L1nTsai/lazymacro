@@ -145,7 +145,24 @@ test("setup goes one page at a time, in imperial units", async ({ page }, info) 
   await continueButton(page).click();
   await expect(page.getByRole("heading", { name: "Daily targets" })).toBeVisible();
   await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2264");
-  await expect(page.getByLabel("Protein (g)")).toHaveValue("128");
+  await expect(page.getByLabel("Protein (g/lb)")).toHaveValue("1");
+  await expect(page.getByText("176 g")).toBeVisible();
+  // 25% of 2,264 kcal, then back: switching units keeps the same amount of fat.
+  await expect(page.getByText("63 g")).toBeVisible();
+  await page.getByRole("radio", { name: "g", exact: true }).click();
+  await expect(page.getByLabel("Fat (g)")).toHaveValue("63");
+  await page.getByRole("radio", { name: "%" }).click();
+  await expect(page.getByLabel("Fat (%)")).toHaveValue("25");
+  // Protein and fat that don't fit raise the calories once typing stops.
+  await page.getByLabel("Calories (kcal)").fill("500");
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("500");
+  await page.getByLabel("Fat (%)").focus();
+  await expect(page.getByText("Calories raised to fit your protein and fat.")).toBeVisible();
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("938");
+  // The most text this screen shows, which still has to fit the smallest phone.
+  await expectDesignRules(page);
+  await page.getByRole("button", { name: "Recalculate from my details" }).click();
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2264");
   await expectDesignRules(page);
   await shot("3-targets");
   await continueButton(page).click();
@@ -215,7 +232,7 @@ test("logged meals fill the ring and bars, and live on their own pages", async (
   const ring = page.locator("svg circle").nth(1);
   await expect(ring).toHaveAttribute("stroke", "var(--data-calories)");
   const proteinFill = page.getByRole("progressbar", { name: "Protein" }).locator("div");
-  await expect(proteinFill).toHaveAttribute("style", /width: 46\.875%.*var\(--data-protein\)/);
+  await expect(proteinFill).toHaveAttribute("style", /width: 34\.09\d*%.*var\(--data-protein\)/);
   await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-today-filled-light.png` });
   await page.emulateMedia({ colorScheme: "dark" });
@@ -305,9 +322,23 @@ test("settings live on short pages, and goals can be edited", async ({ page }, i
   await expect(page.getByText(/below the common daily minimum/)).toBeVisible();
   await expectDesignRules(page);
   await page.getByLabel("Calories (kcal)").fill("2100");
+  await page.getByLabel("Protein (g/lb)").fill("0.9");
+  await page.getByRole("radio", { name: "g", exact: true }).click();
+  await page.getByLabel("Fat (g)").fill("70");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page).toHaveURL(/\/me$/);
   await expect(page.getByRole("link", { name: /Goals/ })).toContainText("2,100 kcal");
+
+  // The formula comes back as it was chosen, and so do the numbers it made.
+  await page.getByRole("link", { name: /Goals/ }).click();
+  await continueButton(page).click();
+  await expect(page.getByRole("heading", { name: "Your goal" })).toBeVisible();
+  await continueButton(page).click();
+  await expect(page.getByLabel("Protein (g/lb)")).toHaveValue("0.9");
+  await expect(page.getByLabel("Fat (g)")).toHaveValue("70");
+  await expect(page.getByLabel("Calories (kcal)")).toHaveValue("2100");
+  await expect(page.getByText("158 g")).toBeVisible();
+  await page.goto("/me");
 
   await page.getByRole("link", { name: /Your data/ }).click();
   await expectDesignRules(page);

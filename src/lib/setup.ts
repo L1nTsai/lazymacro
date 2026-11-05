@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidTimeZone } from "./date";
+import { formulaIsValid } from "./targets";
 
 const body = z.object({
   sex: z.enum(["male", "female"]),
@@ -24,6 +25,13 @@ export const setupSchema = z.object({
     carbsG: macro,
     fatG: macro,
   }),
+  formula: z
+    .object({
+      proteinGPerLb: z.number(),
+      fatUnit: z.enum(["percent", "grams"]),
+      fatValue: z.number(),
+    })
+    .refine(formulaIsValid, "Check your protein and fat numbers."),
   allergies: z.array(z.string().trim().min(1).max(80)).max(100),
   excluded: z.array(z.string().trim().min(1).max(80)).max(100),
   staples: z.array(z.string().trim().min(1).max(80)).max(100),
