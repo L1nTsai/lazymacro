@@ -149,3 +149,18 @@ test("saving a setting shows on a cached page", async ({ page }) => {
   await nav.getByRole("link", { name: "Me", exact: true }).click();
   await expect(row).toContainText("1");
 });
+
+test("a developer gets Approvals in the sidebar", async ({ page }) => {
+  runSql(`insert into app_private.developers (user_id) select id from auth.users where email = '${EMAIL}'`);
+  try {
+    // Signed in before this access existed, so the sidebar needs a fresh load.
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Approvals" }).click();
+    await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+    await settled(page);
+    await expectDesignRules(page);
+    await page.screenshot({ path: "test-results/desktop-approvals.png" });
+  } finally {
+    runSql(`delete from app_private.developers where user_id = (select id from auth.users where email = '${EMAIL}')`);
+  }
+});

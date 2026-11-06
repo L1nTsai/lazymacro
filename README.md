@@ -24,7 +24,14 @@ The microphone only works over https or on localhost, so testing on a phone over
 
 Anyone with a Gmail address can create an account, but it does nothing until you approve it. There are no emails, so addresses aren't verified: only approve people you've checked with.
 
-- **Approve:** in the Supabase dashboard, open Table Editor, then `signup_approvals`, and tick `approved`.
+- **Approve:** open the Approvals tab, which only developer accounts can see, and choose Approve next to the person.
+- **Add a developer:** in the SQL Editor, add their account. It has to exist first, because access belongs to the account rather than the address.
+
+  ```sql
+  insert into app_private.developers (user_id)
+  select id from auth.users where email = 'person@gmail.com';
+  ```
+
 - **Forgotten password:** in the SQL Editor, set a temporary one. They can change it under Me, then Account.
 
   ```sql
@@ -76,6 +83,6 @@ Macros come from the database. Each food goes through these sources in order: pe
 
 - Addresses aren't verified, so someone could sign up with an address they don't own. Approval is the check.
 - Personal data is protected by row-level security in the database, not only by app code.
-- The Gmail rule and approvals are enforced in the database, so calling Supabase directly can't get around them.
+- The Gmail rule, approvals and developer access are enforced in the database, so calling Supabase directly can't get around them.
 - Any signed-in person can add a custom or restaurant food through `save_food`. Its rules stop a custom food being marked verified, but a teammate could still enter wrong numbers, which suits an in-house app.
 - Sign-ins go through the app's server, so Supabase's per-IP limit (30 per 5 minutes) is shared by everyone using the app. That caps password guessing, but an attacker could briefly lock people out.
