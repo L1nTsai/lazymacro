@@ -9,6 +9,18 @@ export const isApproved = cache(async (userId: string): Promise<boolean> => {
   return data?.approved === true;
 });
 
+/** Fails closed: a database hiccup only hides the tab, and shouldn't take the app down with it. */
+export const isDeveloper = cache(async (): Promise<boolean> => {
+  if (!(await getUserId())) return false;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("is_developer");
+  if (error) {
+    console.error("is_developer_failed", { code: error.code });
+    return false;
+  }
+  return data === true;
+});
+
 /** The signed-in, approved person's id, sending anyone else to the right page. */
 export const requireApproved = cache(async (): Promise<string> => {
   const userId = await getUserId();
@@ -30,4 +42,11 @@ export const requireProfile = cache(async () => {
   if (error) throw error;
   if (!data?.display_name || !data.sex) redirect("/onboarding");
   return { userId, name: data.display_name, timezone: data.timezone };
+});
+
+/** The signed-in developer's profile, sending anyone else home. The database checks this too. */
+export const requireDeveloper = cache(async () => {
+  const profile = await requireProfile();
+  if (!(await isDeveloper())) redirect("/");
+  return profile;
 });

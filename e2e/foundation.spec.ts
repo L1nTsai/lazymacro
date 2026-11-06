@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { SIGNUP_PREFIX, TEST_PASSWORD, emailFor, runSql } from "./helpers";
+import { SIGNUP_PREFIX, TEST_DOMAIN, TEST_PASSWORD, emailFor, logEmailFor, newUserSql, queryJson, runSql } from "./helpers";
 
 async function signIn(page: Page, email: string, password = TEST_PASSWORD) {
   await page.goto("/sign-in");
@@ -106,6 +106,42 @@ test("a new Gmail account can do nothing until it's approved", async ({ page }, 
   runSql(`update public.signup_approvals set approved = true where email = '${email}'`);
   await page.getByRole("button", { name: "Check again" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("only a developer can see and approve people who are waiting", async ({ page }, info) => {
+  const developer = logEmailFor(info.project.name);
+  const waiting = `waiting-${info.project.name}@${TEST_DOMAIN}`;
+  const nav = page.getByRole("navigation", { name: "Main" });
+  const approvalsTab = nav.getByRole("link", { name: "Approvals" });
+
+  await signIn(page, developer);
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  await expect(approvalsTab).toHaveCount(0);
+  await page.goto("/approvals");
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+
+  runSql(`insert into app_private.developers (user_id) select id from auth.users where email = '${developer}'`);
+  try {
+    await page.goto("/");
+    await approvalsTab.click();
+    await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+
+    // Someone signing up after the tab was opened still shows, despite the page cache.
+    await nav.getByRole("link", { name: "Today" }).click();
+    await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+    runSql(newUserSql(waiting));
+    await approvalsTab.click();
+    const approve = page.getByRole("button", { name: `Approve ${waiting}` });
+    await expect(approve).toBeVisible();
+    await expectDesignRules(page);
+    await page.screenshot({ path: `test-results/${info.project.name}-approvals.png` });
+
+    await approve.click();
+    await expect(approve).toHaveCount(0);
+    expect(queryJson<{ approved: boolean }>(`select approved from public.signup_approvals where email = '${waiting}'`)).toEqual([{ approved: true }]);
+  } finally {
+    runSql(`delete from app_private.developers where user_id = (select id from auth.users where email = '${developer}')`);
+  }
 });
 
 test("bad credentials explain themselves, and forgetting a password has an answer", async ({ page }, info) => {

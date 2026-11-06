@@ -11,6 +11,20 @@ export const TEST_PASSWORD = "e2e-temporary-password";
 export const emailFor = (project: string) => `${project}@${TEST_DOMAIN}`;
 export const logEmailFor = (project: string) => `log-${project}@${TEST_DOMAIN}`;
 
+/** SQL that creates a confirmed account directly, so the tests never send real email. */
+export const newUserSql = (email: string) => `
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+    confirmation_token, recovery_token, email_change, email_change_token_new,
+    email_change_token_current, reauthentication_token, phone_change, phone_change_token,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+  ) values (
+    gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+    '${email}', extensions.crypt('${TEST_PASSWORD}', extensions.gen_salt('bf')), now(),
+    '', '', '', '', '', '', '', '',
+    '{"provider":"email","providers":["email"]}', '{}', now(), now()
+  );`;
+
 /** Runs SQL on the linked project through the Supabase CLI. */
 export function runSql(statement: string) {
   const dir = mkdtempSync(join(tmpdir(), "lazymacro-e2e-"));
