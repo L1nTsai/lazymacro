@@ -24,6 +24,12 @@
   --status-rough: #7928ca;
   --on-status: #ffffff;
   --on-status-amber: #000000;
+
+  /* Calendar shades, from a little logged to the full target. */
+  --heat-1: #d3e5ff;
+  --heat-2: #8fc1ff;
+  --heat-3: #3291ff;
+  --heat-4: #0070f3;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,6 +50,11 @@
 
     --status-verified: #0070f3;
     --status-rough: #8a3fe0;
+
+    --heat-1: #0a2a52;
+    --heat-2: #0f4c99;
+    --heat-3: #0070f3;
+    --heat-4: #52a8ff;
   }
 }
 

@@ -235,8 +235,8 @@ test("setup goes one page at a time, in imperial units", async ({ page }, info) 
   await expectSlide(page, () => page.getByRole("button", { name: "Finish" }).click());
 
   await expect(page.getByRole("heading", { name: "Hi, Sam" })).toBeVisible();
-  await expect(page.getByText("2,264")).toBeVisible();
-  await expect(page.getByText("kcal left")).toBeVisible();
+  await expect(page.getByText("2,264", { exact: true })).toBeVisible();
+  await expect(page.getByText("kcal left", { exact: true })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Protein" })).toBeVisible();
   await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-today-light.png` });
@@ -245,11 +245,18 @@ test("setup goes one page at a time, in imperial units", async ({ page }, info) 
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
   await page.emulateMedia({ colorScheme: "light" });
 
-  for (const name of ["Today", "Fridge", "Ideas", "Me"]) {
+  for (const name of ["Today", "Fridge", "Me"]) {
     const box = await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
     expect(box!.width).toBeGreaterThanOrEqual(44);
   }
+  const mic = (await page.getByRole("link", { name: "Log a meal" }).boundingBox())!;
+  expect(Math.abs(mic.x + mic.width / 2 - page.viewportSize()!.width / 2)).toBeLessThanOrEqual(1);
+
+  await page.getByRole("region", { name: "Meal ideas" }).getByRole("link").click();
+  await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
+  await page.goBack();
+
   await page.getByRole("link", { name: "Log a meal" }).click();
   await expect(page.getByRole("heading", { name: "Log a meal" })).toBeVisible();
   await expectDesignRules(page);
@@ -281,8 +288,8 @@ test("logged meals fill the ring and bars, and live on their own pages", async (
   const email = emailFor(info.project.name);
   logMeal(email, "breakfast", 1100, 60, 130, 30);
   await signIn(page, email);
-  await expect(page.getByText("1,164")).toBeVisible();
-  await expect(page.getByText("kcal left")).toBeVisible();
+  await expect(page.getByText("1,164", { exact: true })).toBeVisible();
+  await expect(page.getByText("kcal left", { exact: true })).toBeVisible();
 
   const ring = page.locator("svg circle").nth(1);
   await expect(ring).toHaveAttribute("stroke", "var(--data-calories)");
@@ -294,16 +301,19 @@ test("logged meals fill the ring and bars, and live on their own pages", async (
   await page.screenshot({ path: `test-results/${info.project.name}-today-filled-dark.png` });
   await page.emulateMedia({ colorScheme: "light" });
 
-  // Meals open on their own page, with a slide each way.
-  await expectSlide(page, () => page.getByRole("link", { name: /Meals/ }).click());
-  await expect(page.getByRole("heading", { name: "Meals" })).toBeVisible();
+  // Each meal opens on its own page, with a slide each way.
+  await expect(page.getByRole("region", { name: "Meal ideas" })).toContainText("1,164 kcal left");
+  const breakfast = page.getByRole("link", { name: /^Breakfast/ });
+  for (const text of ["1,100 kcal", "P 60 g", "C 130 g", "F 30 g"]) await expect(breakfast).toContainText(text);
+  await expect(page.getByRole("link", { name: /^Lunch/ })).toContainText("None");
+  await expectSlide(page, () => page.getByRole("link", { name: /^Breakfast/ }).click());
+  await expect(page.getByRole("heading", { name: "Breakfast" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   await expectDesignRules(page);
   await expectSlide(page, () => page.getByRole("link", { name: "Back" }).click());
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
-  await page.getByRole("link", { name: /Meals/ }).click();
-  await page.getByRole("link", { name: /Breakfast/ }).click();
+  await page.getByRole("link", { name: /^Breakfast/ }).click();
   await expect(page.getByRole("heading", { name: "Breakfast" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Items" }).getByRole("link").first()).toContainText("1100 kcal");
 
@@ -320,6 +330,7 @@ test("logged meals fill the ring and bars, and live on their own pages", async (
   logMeal(email, "lunch", 1300, 10, 10, 5);
   await page.reload();
   await expect(page.getByText("kcal over target")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Meal ideas" })).toContainText("reached today's calorie target");
   await expect(ring).toHaveAttribute("stroke", "var(--data-over)");
   await expect(page.locator("p[role=alert]")).toHaveCount(0);
   await page.screenshot({ path: `test-results/${info.project.name}-today-over.png` });
