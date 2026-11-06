@@ -100,8 +100,8 @@ test("the plan's worked example goes from a sentence to the dashboard", async ({
   await page.getByRole("button", { name: "Confirm" }).click();
 
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
-  await expect(page.getByText("kcal left")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Meals/ })).not.toContainText("Nothing logged");
+  await expect(page.getByText("kcal left", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Breakfast/ })).toContainText(" kcal");
   await expectDesignRules(page);
   await page.screenshot({ path: `test-results/${info.project.name}-log-today.png` });
 
@@ -369,7 +369,7 @@ test("history shows the week, and yesterday's meal can be copied", async ({ page
   await page.goto("/log");
   await page.getByRole("button", { name: /Copy yesterday/ }).click();
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Meals/ })).toContainText(" kcal");
+  await expect(page.getByRole("region", { name: "Today's meals" })).toContainText(" kcal");
   expect(countMeals(email)).toBe(2);
 });
 
@@ -470,7 +470,7 @@ test("visited tabs open without calling the server, and new data still shows at 
     await tab(name).click();
     await expect(tab(name)).toHaveAttribute("aria-current", "page");
   }
-  await expect(page.getByRole("link", { name: /^Meals/ })).toContainText("Nothing logged yet");
+  await expect(page.getByRole("region", { name: "Today's meals" })).not.toContainText(" kcal");
 
   // A second round comes from memory. Links on these pages may still prefetch
   // their own destinations, so this only counts requests for the tabs themselves.
@@ -493,7 +493,7 @@ test("visited tabs open without calling the server, and new data still shows at 
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /^Meals/ })).not.toContainText("Nothing logged yet");
+  await expect(page.getByRole("region", { name: "Today's meals" })).toContainText(" kcal");
 });
 
 /** Records which of the tabs are fetched from the server. */
@@ -512,7 +512,7 @@ test("every tab loads when the app opens on a page without the tab bar", async (
   const calls = watchTabRequests(page);
   await page.goto("/meals");
   await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
-  await expect.poll(() => ["/", "/fridge", "/ideas", "/me"].filter((href) => !calls.has(href))).toEqual([]);
+  await expect.poll(() => ["/", "/fridge", "/me"].filter((href) => !calls.has(href))).toEqual([]);
 
   // Having loaded, the first visit needs nothing more from the server.
   await page.getByRole("link", { name: "Back" }).click();
@@ -536,11 +536,11 @@ test("expired tabs reload on returning to the app, and fresh ones don't", async 
   calls.clear();
   await returnToApp();
   await page.waitForLoadState("networkidle");
-  expect([...calls].filter((href) => ["/fridge", "/ideas", "/me"].includes(href))).toEqual([]);
+  expect([...calls].filter((href) => ["/fridge", "/me"].includes(href))).toEqual([]);
 
   await page.clock.fastForward("06:00");
   await returnToApp();
-  await expect.poll(() => ["/fridge", "/ideas", "/me"].filter((href) => !calls.has(href))).toEqual([]);
+  await expect.poll(() => ["/fridge", "/me"].filter((href) => !calls.has(href))).toEqual([]);
   await page.waitForLoadState("networkidle");
 
   calls.clear();

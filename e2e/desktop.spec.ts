@@ -67,12 +67,12 @@ test("the sidebar replaces the tab bar and stays on every page", async ({ page }
   await page.screenshot({ path: `test-results/${info.project.name}-today.png` });
 });
 
-test("Today shows the numbers and the meals side by side", async ({ page }) => {
-  const ring = (await page.getByText("kcal left").boundingBox())!;
-  const meals = page.getByRole("region", { name: "Today's meals" });
-  await expect(meals).toContainText("Lunch: Chicken, breast");
-  expect((await meals.boundingBox())!.x).toBeGreaterThan(ring.x);
-  await expect(page.getByRole("link", { name: /^Meals/ })).toBeHidden();
+test("Today shows the numbers and meals beside the month", async ({ page }) => {
+  const ring = (await page.getByText("kcal left", { exact: true }).boundingBox())!;
+  await expect(page.getByRole("region", { name: "Today's meals" }).getByRole("link", { name: /^Lunch/ })).toContainText(" kcal");
+  const month = page.getByRole("region", { name: "This month" });
+  await expect(month.locator("[aria-current=date]")).toHaveAttribute("aria-label", / kcal$/);
+  expect((await month.boundingBox())!.x).toBeGreaterThan(ring.x);
 });
 
 test("Me shows the menu beside the chosen setting", async ({ page }, info) => {

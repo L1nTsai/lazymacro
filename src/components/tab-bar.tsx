@@ -13,7 +13,6 @@ const icon = (path: ReactNode) => (
 
 const TODAY = icon(<><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5H12z" /></>);
 const FRIDGE = icon(<><rect x="6" y="3" width="12" height="18" rx="2" /><path d="M6 10h12M9 6v1.5M9 13v3" /></>);
-const IDEAS = icon(<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></>);
 const ME = icon(<><circle cx="12" cy="8" r="4" /><path d="M4.5 21c1-4 4-6 7.5-6s6.500 2 7.500 6" /></>);
 const APPROVALS = icon(<><circle cx="10" cy="8" r="4" /><path d="M3 21c1-4 3.500-6 7-6 1.300 0 2.500.3 3.500.8M15 18.500l2.500 2.500 4-5" /></>);
 const MIC = (
@@ -43,8 +42,7 @@ function Tab({ href, label, children }: { href: string; label: string; children:
 const hideOnPhone = (pathname: string) =>
   pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/log") || pathname.startsWith("/history");
 
-
-const TABS = ["/", "/fridge", "/ideas", "/me"];
+const TABS = ["/", "/fridge", "/me"];
 
 /**
  * Links only load their page while on screen, and the bar is hidden on phone
@@ -104,9 +102,9 @@ export function TabBar({ showApprovals = false }: { showApprovals?: boolean }) {
             {MIC}
           </Link>
         </div>
-        <Tab href="/ideas" label="Ideas">{IDEAS}</Tab>
         <Tab href="/me" label="Me">{ME}</Tab>
-        {showApprovals ? <Tab href="/approvals" label="Approvals">{APPROVALS}</Tab> : null}
+        {/* Holds the place of the fifth tab, so the mic stays in the middle on phones. */}
+        {showApprovals ? <Tab href="/approvals" label="Approvals">{APPROVALS}</Tab> : <div aria-hidden="true" className="flex-1 lg:hidden" />}
       </div>
     </nav>
   );

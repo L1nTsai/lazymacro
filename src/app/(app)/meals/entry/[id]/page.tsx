@@ -5,7 +5,7 @@ import { requireProfile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import { EntryEditor } from "./entry-editor";
 
-const safeBack = (value: string | undefined) => (value && /^\/(meals|history)(\/[\w-]+)*$/.test(value) ? value : "/meals");
+const safeBack = (value: string | undefined) => (value && /^\/(meals|history)(\/[\w-]+)*$/.test(value) ? value : "/");
 
 export default async function EntryPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ back?: string }> }) {
   await requireProfile();

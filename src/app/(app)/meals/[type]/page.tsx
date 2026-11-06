@@ -23,7 +23,7 @@ export default async function MealPage({ params }: { params: Promise<{ type: str
 
   return (
     <PageSlide>
-      <SubPage title={MEAL_LABELS[type as MealType]} back="/meals">
+      <SubPage title={MEAL_LABELS[type as MealType]} back="/">
         {items.length ? <MealItems items={items} back={`/meals/${type}`} /> : <p className="text-sm text-muted">Nothing logged yet.</p>}
       </SubPage>
     </PageSlide>
