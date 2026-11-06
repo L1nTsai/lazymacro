@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 
 const icon = (path: ReactNode) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -42,10 +43,39 @@ function Tab({ href, label, children }: { href: string; label: string; children:
 const hideOnPhone = (pathname: string) =>
   pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/log") || pathname.startsWith("/history");
 
+
+const TABS = ["/", "/fridge", "/ideas", "/me"];
+
+/**
+ * Links only load their page while on screen, and the bar is hidden on phone
+ * sub-pages. Saved pages also expire with nothing to reload them, so this loads
+ * the tabs on open and on returning to the app. Pages still fresh aren't fetched.
+ */
+function usePreloadTabs(enabled: boolean) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!enabled) return;
+    const preload = () => {
+      if (document.visibilityState !== "visible") return;
+      // Without "full", pages that read the database wouldn't include their data.
+      for (const href of TABS) router.prefetch(href, { kind: PrefetchKind.FULL });
+    };
+    preload();
+    document.addEventListener("visibilitychange", preload);
+    window.addEventListener("focus", preload);
+    return () => {
+      document.removeEventListener("visibilitychange", preload);
+      window.removeEventListener("focus", preload);
+    };
+  }, [enabled, router]);
+}
+
 export function TabBar({ showApprovals = false }: { showApprovals?: boolean }) {
   const pathname = usePathname();
   // Setup comes before the app exists for this person, so it has no navigation.
-  if (pathname.startsWith("/onboarding")) return null;
+  const inSetup = pathname.startsWith("/onboarding");
+  usePreloadTabs(!inSetup);
+  if (inSetup) return null;
   return (
     <nav
       aria-label="Main"
