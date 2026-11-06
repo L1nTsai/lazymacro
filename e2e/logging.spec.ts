@@ -496,6 +496,59 @@ test("visited tabs open without calling the server, and new data still shows at 
   await expect(page.getByRole("link", { name: /^Meals/ })).not.toContainText("Nothing logged yet");
 });
 
+/** Records which of the tabs are fetched from the server. */
+function watchTabRequests(page: Page) {
+  const calls = new Set<string>();
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    // Route lookups carry no page data, so they don't count as loading a tab.
+    if (url.searchParams.has("_rsc") && !request.headers()["next-router-segment-prefetch"]) calls.add(url.pathname);
+  });
+  return calls;
+}
+
+test("every tab loads when the app opens on a page without the tab bar", async ({ page }, info) => {
+  await signIn(page, logEmailFor(info.project.name));
+  const calls = watchTabRequests(page);
+  await page.goto("/meals");
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
+  await expect.poll(() => ["/", "/fridge", "/ideas", "/me"].filter((href) => !calls.has(href))).toEqual([]);
+
+  // Having loaded, the first visit needs nothing more from the server.
+  await page.getByRole("link", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: /^Hi,/ })).toBeVisible();
+  calls.clear();
+  const fridge = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Fridge", exact: true });
+  await fridge.click();
+  await expect(fridge).toHaveAttribute("aria-current", "page");
+  expect(calls.has("/fridge")).toBe(false);
+});
+
+test("expired tabs reload on returning to the app, and fresh ones don't", async ({ page }, info) => {
+  await page.clock.install();
+  await signIn(page, logEmailFor(info.project.name));
+  const calls = watchTabRequests(page);
+  const fridge = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Fridge", exact: true });
+  const returnToApp = () => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  // Lets the first load finish, so that it can't be mistaken for a reload.
+  await page.waitForLoadState("networkidle");
+
+  calls.clear();
+  await returnToApp();
+  await page.waitForLoadState("networkidle");
+  expect([...calls].filter((href) => ["/fridge", "/ideas", "/me"].includes(href))).toEqual([]);
+
+  await page.clock.fastForward("06:00");
+  await returnToApp();
+  await expect.poll(() => ["/fridge", "/ideas", "/me"].filter((href) => !calls.has(href))).toEqual([]);
+  await page.waitForLoadState("networkidle");
+
+  calls.clear();
+  await fridge.click();
+  await expect(fridge).toHaveAttribute("aria-current", "page");
+  expect(calls.has("/fridge")).toBe(false);
+});
+
 test.describe("when the phone's clock differs from the server's", () => {
   // Half a day from UTC, so a clock read in both places can't agree.
   test.use({ timezoneId: "Pacific/Kiritimati" });
