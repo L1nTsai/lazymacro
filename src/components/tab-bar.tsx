@@ -43,6 +43,7 @@ function Tab({ href, label, children }: { href: string; label: string; children:
 const hideOnPhone = (pathname: string) =>
   pathname.startsWith("/me/") || pathname.startsWith("/meals") || pathname.startsWith("/log") || pathname.startsWith("/history");
 
+
 const TABS = ["/", "/fridge", "/ideas", "/me"];
 
 /**
