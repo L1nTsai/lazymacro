@@ -276,6 +276,61 @@ begin
   end;
 end $$;
 
+-- Only a developer can see who's waiting or approve them.
+reset role;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.assert((select count(*) from app_private.developers d join auth.users u on u.id = d.user_id where u.email = 'lintsai2404@gmail.com') = 1, 'the owner is a developer');
+select pg_temp.assert((select count(*) from app_private.developers) = 1, 'the owner is the only developer');
+select pg_temp.assert((select a.approved from public.signup_approvals a join app_private.developers d on d.user_id = a.user_id), 'the owner is approved');
+select pg_temp.new_user('00000000-0000-4000-8000-0000000000d1', 'developer@security-test.lazymacro.test');
+select pg_temp.new_user('00000000-0000-4000-8000-0000000000d2', 'approved@security-test.lazymacro.test');
+select pg_temp.new_user('00000000-0000-4000-8000-0000000000d3', 'waiting@security-test.lazymacro.test');
+update public.signup_approvals set approved = true where user_id in ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2');
+insert into app_private.developers (user_id) values ('00000000-0000-4000-8000-0000000000d1');
+
+select pg_temp.act_as('00000000-0000-4000-8000-0000000000d2');
+select pg_temp.assert(not public.is_developer(), 'an approved person is not a developer');
+do $$
+begin
+  begin
+    perform public.list_pending_approvals();
+    raise exception 'FAILED: a non-developer listed people waiting';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.approve_signup('00000000-0000-4000-8000-0000000000d3');
+    raise exception 'FAILED: a non-developer approved someone';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into app_private.developers (user_id) values ('00000000-0000-4000-8000-0000000000d2');
+    raise exception 'FAILED: a person made themselves a developer';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+select pg_temp.act_as('00000000-0000-4000-8000-0000000000d3');
+do $$
+begin
+  perform public.approve_signup('00000000-0000-4000-8000-0000000000d3');
+  raise exception 'FAILED: a waiting person approved themselves';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+select pg_temp.assert(not (select approved from public.signup_approvals where user_id = '00000000-0000-4000-8000-0000000000d3'), 'the person is still waiting');
+
+select pg_temp.act_as('00000000-0000-4000-8000-0000000000d1');
+select pg_temp.assert(public.is_developer(), 'a developer is a developer');
+select pg_temp.assert((select count(*) from public.list_pending_approvals() where email = 'waiting@security-test.lazymacro.test') = 1, 'a developer sees a person waiting');
+select pg_temp.assert((select count(*) from public.list_pending_approvals() where email = 'approved@security-test.lazymacro.test') = 0, 'a developer does not see an approved person');
+select public.approve_signup('00000000-0000-4000-8000-0000000000d3');
+select public.approve_signup('00000000-0000-4000-8000-0000000000d3');
+select pg_temp.assert((select count(*) from public.list_pending_approvals() where email = 'waiting@security-test.lazymacro.test') = 0, 'an approved person leaves the list');
+reset role;
+select pg_temp.assert((select approved from public.signup_approvals where user_id = '00000000-0000-4000-8000-0000000000d3'), 'a developer approved someone');
+delete from auth.users where id in ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000d3');
+select pg_temp.assert((select count(*) from app_private.developers) = 1, 'deleting an account removes developer access');
+
 -- Deleting an account removes every personal row.
 reset role;
 select pg_temp.act_as('00000000-0000-4000-8000-00000000000a');
